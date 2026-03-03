@@ -33,36 +33,26 @@
     .card-snippet{font-size:12px;color:var(--muted);line-height:1.4;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
     .card-meta{display:flex;gap:6px;margin-top:8px;flex-wrap:wrap}
 
-    .email-preview{overflow-y:auto;padding:28px 32px}
-    .preview-header h2{font-size:22px;font-weight:600;margin-bottom:10px;line-height:1.3}
-    .preview-meta{display:flex;flex-direction:column;gap:2px;font-size:13px;color:var(--muted);margin-bottom:12px}
-    .preview-badges{display:flex;gap:8px;margin-bottom:20px;flex-wrap:wrap}
-    .preview-body{font-size:14px;line-height:1.7;white-space:pre-wrap}
-    .preview-explanation{margin-top:20px;padding:14px;background:#fefce8;border:1px solid #fde68a;border-radius:var(--r);font-size:13px;line-height:1.5}
+    .email-preview{overflow-y:auto;padding:16px 24px;display:flex;flex-direction:column}
+    .preview-header h2{font-size:18px;font-weight:600;margin-bottom:6px;line-height:1.3}
+    .preview-meta{display:flex;flex-direction:column;gap:2px;font-size:12px;color:var(--muted);margin-bottom:8px}
+    .preview-badges{display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap}
+    .preview-body{font-size:14px;line-height:1.7;white-space:pre-wrap;flex:1}
+    .frame-wrap{flex:1;overflow:hidden;border-radius:var(--r);border:1px solid var(--border)}
+    .preview-frame{width:133%;height:133%;border:none;transform:scale(0.75);transform-origin:0 0}
     .preview-actions{margin-top:24px;padding-top:16px;border-top:1px solid var(--border)}
 
     .task-panel{border-left:1px solid var(--border);overflow-y:auto;background:var(--surface);padding:18px}
     .task-panel h3{font-size:15px;font-weight:600;margin-bottom:14px}
-    .task-card{padding:12px;border:1px solid var(--border);border-radius:var(--r);margin-bottom:10px}
-    .task-action{font-weight:600;font-size:13px;color:var(--accent);margin-bottom:4px}
-    .task-email{font-size:12px;font-weight:500;margin-bottom:4px}
-    .task-reason{font-size:11px;color:var(--muted);margin-bottom:8px;line-height:1.4}
-    .task-buttons{display:flex;gap:6px;align-items:center}
 
     .badge{display:inline-block;padding:2px 10px;border-radius:12px;font-size:11px;font-weight:500;background:#f3f4f6;color:var(--muted)}
     .cat-work{background:#dbeafe;color:#1e40af}.cat-personal{background:#ede9fe;color:#5b21b6}.cat-billing{background:#d1fae5;color:#065f46}
     .cat-marketing{background:#fef3c7;color:#92400e}.cat-risk{background:#fee2e2;color:#991b1b}.cat-unclassified{background:#f3f4f6;color:#6b7280}
-    .priority-1{background:#fee2e2;color:#991b1b}.priority-2{background:#ffedd5;color:#9a3412}.priority-3{background:#fef3c7;color:#92400e}
-    .priority-4{background:#e0e7ff;color:#3730a3}.priority-5{background:#f3f4f6;color:#6b7280}
-    .status-pending{background:#fef3c7;color:#92400e}.status-processing{background:#dbeafe;color:#1e40af}.status-done{background:#d1fae5;color:#065f46}
-    .status-failed{background:#fee2e2;color:#991b1b}.status-needs_review{background:#fce7f3;color:#9d174d}
-    .badge-danger{background:#fee2e2;color:#991b1b}.badge-approved{background:#d1fae5;color:#065f46}
+    .pri-critical{background:#fee2e2;color:#991b1b}.pri-high{background:#ffedd5;color:#9a3412}
 
     .btn{padding:8px 16px;border-radius:6px;border:none;font-size:13px;font-weight:500;cursor:pointer;transition:all .15s}
     .btn-primary{background:var(--accent);color:#fff}.btn-primary:hover{background:var(--accent-hover)}
     .btn-outline{background:transparent;border:1px solid var(--border);color:var(--text)}.btn-outline:hover{background:#f3f4f6}
-    .btn-success{background:var(--success);color:#fff}.btn-success:hover{opacity:.9}
-    .btn-sm{padding:5px 10px;font-size:12px}
     .empty-state{padding:40px 20px;text-align:center;color:var(--muted);font-size:14px}
   </style>
 </head>
@@ -74,8 +64,7 @@
     <span class="sub">Policy-Aware Email Triage</span>
   </div>
   <div class="topbar-actions">
-    <button class="btn btn-outline" onclick="importEmails('gmail')">Import Gmail</button>
-    <button class="btn btn-outline" onclick="importEmails('outlook')">Import Outlook</button>
+    <button class="btn btn-outline" onclick="importEmails()">Import Gmail</button>
     <button class="btn btn-primary" onclick="runPipeline()">Run Triage</button>
   </div>
 </header>
@@ -94,21 +83,20 @@
   <!-- LEFT: Email List -->
   <aside class="email-list">
     {% for email in emails %}
-    <div class="email-card {% if selected and email.id == selected.id %}selected{% endif %}" onclick="selectEmail({{ email.id }})">
+    <div class="email-card {% if selected and email.idx == selected.idx %}selected{% endif %}" onclick="selectEmail({{ email.idx }})">
       <div class="card-top">
         <span class="sender">{{ email.sender_name|default:email.sender }}</span>
-        <span class="time">{{ email.received_at|date:"M d, H:i" }}</span>
+        <span class="time">{{ email.received_at|truncatechars:16 }}</span>
       </div>
       <div class="card-subject">{{ email.subject }}</div>
       <div class="card-snippet">{{ email.snippet|truncatechars:80 }}</div>
       <div class="card-meta">
-        <span class="badge cat-{{ email.category }}">{{ email.get_category_display }}</span>
-        <span class="badge priority-{{ email.priority }}">P{{ email.priority }}</span>
-        <span class="badge status-{{ email.status }}">{{ email.get_status_display }}</span>
+        <span class="badge cat-{{ email.category|default:'unclassified' }}">{{ email.category|default:"unclassified" }}</span>
+        {% if email.priority == "urgent" %}<span class="badge pri-critical">urgent</span>{% elif email.priority == "important" %}<span class="badge pri-high">important</span>{% endif %}
       </div>
     </div>
     {% empty %}
-    <div class="empty-state">No emails yet. Import from Gmail or Outlook to get started.</div>
+    <div class="empty-state">No emails yet. Import from Gmail to get started.</div>
     {% endfor %}
   </aside>
 
@@ -119,21 +107,20 @@
       <h2>{{ selected.subject }}</h2>
       <div class="preview-meta">
         <span><strong>From:</strong> {{ selected.sender_name }} &lt;{{ selected.sender }}&gt;</span>
-        <span><strong>Date:</strong> {{ selected.received_at|date:"M d, Y H:i" }}</span>
+        <span><strong>Date:</strong> {{ selected.received_at }}</span>
       </div>
       <div class="preview-badges">
-        <span class="badge cat-{{ selected.category }}">{{ selected.get_category_display }}</span>
-        <span class="badge priority-{{ selected.priority }}">Priority {{ selected.priority }}</span>
-        {% if selected.confidence %}<span class="badge">Confidence: {{ selected.confidence|floatformat:0 }}%</span>{% endif %}
-        {% if selected.risk_score > 0 %}<span class="badge badge-danger">Risk: {{ selected.risk_score|floatformat:0 }}%</span>{% endif %}
+        <span class="badge cat-{{ selected.category|default:'unclassified' }}">{{ selected.category|default:"unclassified" }}</span>
+        {% if selected.priority == "urgent" %}<span class="badge pri-critical">urgent</span>{% elif selected.priority == "important" %}<span class="badge pri-high">important</span>{% endif %}
       </div>
     </div>
-    <div class="preview-body">{{ selected.body|linebreaksbr }}</div>
-    {% if selected.explanation %}
-    <div class="preview-explanation"><strong>Agent Reasoning:</strong> {{ selected.explanation }}</div>
+    {% if selected.body_html %}
+    <div class="frame-wrap"><iframe class="preview-frame" id="email-frame" sandbox="allow-same-origin" srcdoc="{{ selected.body_html }}"></iframe></div>
+    {% else %}
+    <div class="preview-body">{{ selected.body_plain|linebreaksbr }}</div>
     {% endif %}
     <div class="preview-actions">
-      <button class="btn btn-primary" onclick="triageEmail({{ selected.id }})">Triage This Email</button>
+      <button class="btn btn-primary" onclick="triageEmail({{ selected.idx }})">Triage This Email</button>
     </div>
     {% else %}
     <div class="empty-state">Select an email to preview</div>
@@ -143,35 +130,16 @@
   <!-- RIGHT: Task Queue -->
   <aside class="task-panel">
     <h3>Task Queue</h3>
-    {% for task in tasks %}
-    <div class="task-card">
-      <div class="task-action">{{ task.get_action_display }}</div>
-      <div class="task-email">{{ task.email.subject|truncatechars:40 }}</div>
-      <div class="task-reason">{{ task.reason|truncatechars:80 }}</div>
-      <div class="task-buttons">
-        {% if not task.approved %}
-        <button class="btn btn-sm btn-success" onclick="approveTask({{ task.id }})">Approve</button>
-        {% else %}
-        <button class="btn btn-sm btn-primary" onclick="executeTask({{ task.id }})">Execute</button>
-        <span class="badge badge-approved">Approved</span>
-        {% endif %}
-      </div>
-    </div>
-    {% empty %}
     <div class="empty-state">No pending tasks. Run triage to generate actions.</div>
-    {% endfor %}
   </aside>
 </main>
 
 <script>
-  function getCookie(n){const v=document.cookie.match('(^|;)\\s*'+n+'\\s*=\\s*([^;]+)');return v?v.pop():''}
-  function selectEmail(id){const p=new URLSearchParams(location.search);p.set('selected',id);location.search=p}
-  function post(url){fetch(url,{method:'POST',headers:{'X-CSRFToken':getCookie('csrftoken')}}).then(r=>r.json()).then(()=>location.reload()).catch(e=>alert(e))}
-  function importEmails(s){const f=new FormData();f.append('source',s);fetch('/import/',{method:'POST',headers:{'X-CSRFToken':getCookie('csrftoken')},body:f}).then(r=>r.json()).then(()=>location.reload())}
+  function selectEmail(idx){const p=new URLSearchParams(location.search);p.set('selected',idx);location.search=p}
+  function post(url){fetch(url,{method:'POST'}).then(r=>r.json()).then(()=>location.reload()).catch(e=>alert(e))}
+  function importEmails(){post('/import/')}
   function runPipeline(){post('/run-pipeline/')}
-  function triageEmail(id){post('/email/'+id+'/triage/')}
-  function approveTask(id){post('/task/'+id+'/approve/')}
-  function executeTask(id){post('/task/'+id+'/execute/')}
+  function triageEmail(idx){post('/email/'+idx+'/triage/')}
 </script>
 </body>
 </html>
