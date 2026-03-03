@@ -57,7 +57,7 @@ TEMPLATES = [
 WSGI_APPLICATION = 'mailpilot.wsgi.application'
 
 
-# No database configured — will connect to Supabase later
+# JSON-file storage in database/ folder — no SQL needed
 DATABASES = {}
 
 
