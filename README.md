@@ -6,8 +6,13 @@ Policy-aware email triage agent. Classifies, prioritizes, and executes actions o
 
 ```bash
 cd MailPilot
-pip install django
-python3 manage.py migrate
-python3 manage.py seed
+pip install django pydantic google-api-python-client google-auth-oauthlib
 python3 manage.py runserver
 ```
+
+## Gmail Import
+
+1. Create OAuth credentials at [Google Cloud Console](https://console.cloud.google.com)
+2. Save as `credentials.json` next to `manage.py`
+3. Add your Gmail as a test user in OAuth consent screen
+4. Click **Import Gmail** in the UI

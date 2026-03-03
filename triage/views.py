@@ -1,91 +1,103 @@
-from django.shortcuts import render, get_object_or_404
+import json
+from pathlib import Path
+
+from django.shortcuts import render
 from django.http import JsonResponse
 from django.views.decorators.http import require_POST
 
-from .models import Email, Task
+from .schemas import Message, Priority
+
+DATA_FILE = Path(__file__).resolve().parent.parent / "database" / "emails.json"
+
+# Lower number = higher priority in sort order
+_TIER_ORDER = {p.value: i for i, p in enumerate(Priority)}
+_DEFAULT_TIER = len(Priority)
+
+
+def _load() -> list[dict]:
+    if DATA_FILE.exists():
+        return json.loads(DATA_FILE.read_text())
+    return []
+
+
+def _save(emails: list[dict]):
+    DATA_FILE.write_text(json.dumps(emails, indent=2, default=str))
 
 
 def inbox(request):
-    """Main inbox view — left panel email list + right task panel."""
-    emails = Email.objects.all()
+    emails = _load()
     category = request.GET.get("category")
     if category:
-        emails = emails.filter(category=category)
-    selected_id = request.GET.get("selected")
-    selected_email = None
-    if selected_id:
-        selected_email = Email.objects.filter(pk=selected_id).first()
-    elif emails.exists():
-        selected_email = emails.first()
-    tasks = Task.objects.filter(executed=False).select_related("email")[:20]
+        filtered = [e for e in emails if e.get("category", "unclassified") == category]
+    else:
+        filtered = emails
+
+    selected_idx = request.GET.get("selected")
+    selected = None
+    if selected_idx and selected_idx.isdigit() and int(selected_idx) < len(emails):
+        selected = {**emails[int(selected_idx)], "idx": int(selected_idx)}
+    elif filtered:
+        real_idx = emails.index(filtered[0])
+        selected = {**filtered[0], "idx": real_idx}
+
+    def _sort_key(item):
+        e = item[1] if isinstance(item, tuple) else item
+        tier = _TIER_ORDER.get(e.get("priority", ""), _DEFAULT_TIER)
+        rank = e.get("priority_rank", 9999)
+        return (tier, rank)
+
+    if not category:
+        email_list = [{"idx": i, **e} for i, e in enumerate(emails)]
+    else:
+        email_list = [{"idx": emails.index(e), **e} for e in filtered]
+    email_list.sort(key=_sort_key)
+
     return render(request, "triage/inbox.html", {
-        "emails": emails,
-        "selected": selected_email,
-        "tasks": tasks,
+        "emails": email_list,
+        "selected": selected,
+        "tasks": [],
         "current_category": category or "all",
     })
 
 
-def email_detail(request, pk):
-    """AJAX endpoint — returns email detail as JSON."""
-    email = get_object_or_404(Email, pk=pk)
-    return JsonResponse({
-        "id": email.id,
-        "subject": email.subject,
-        "sender": email.sender,
-        "sender_name": email.sender_name,
-        "body": email.body,
-        "received_at": email.received_at.isoformat(),
-        "category": email.category,
-        "priority": email.priority,
-        "confidence": email.confidence,
-        "risk_score": email.risk_score,
-        "status": email.status,
-        "explanation": email.explanation,
-        "tasks": list(email.tasks.values("id", "action", "reason", "approved", "executed")),
-    })
+def email_detail(request, idx):
+    emails = _load()
+    if idx >= len(emails):
+        return JsonResponse({"error": "not found"}, status=404)
+    return JsonResponse({"idx": idx, **emails[idx]})
 
 
 @require_POST
-def triage_email(request, pk):
-    """Run the agent pipeline on a single email."""
-    # TODO: call agent.route → agent.evaluate → create Tasks
-    email = get_object_or_404(Email, pk=pk)
-    return JsonResponse({"status": "ok", "email_id": email.id})
-
-
-@require_POST
-def approve_task(request, pk):
-    """Approve a proposed task."""
-    task = get_object_or_404(Task, pk=pk)
-    task.approved = True
-    task.save()
-    return JsonResponse({"status": "approved", "task_id": task.id})
-
-
-@require_POST
-def execute_task(request, pk):
-    """Execute an approved task."""
-    task = get_object_or_404(Task, pk=pk)
-    if not task.approved:
-        return JsonResponse({"error": "Task not approved"}, status=400)
-    # TODO: call agent.work
-    task.executed = True
-    task.save()
-    return JsonResponse({"status": "executed", "task_id": task.id})
+def triage_email(request, idx):
+    # TODO: call agent pipeline
+    emails = _load()
+    if idx >= len(emails):
+        return JsonResponse({"error": "not found"}, status=404)
+    return JsonResponse({"status": "ok", "idx": idx})
 
 
 @require_POST
 def import_emails(request):
-    """Import emails from Gmail or Outlook."""
-    source = request.POST.get("source", "gmail")
-    # TODO: OAuth flow + Gmail API / Microsoft Graph API
-    return JsonResponse({"status": "import_started", "source": source})
+    from .gmail import fetch_emails
+    try:
+        raw = fetch_emails(max_results=20)
+    except Exception as e:
+        return JsonResponse({"error": str(e)}, status=500)
+    emails = _load()
+    existing_threads = {e.get("thread_id") for e in emails}
+    count = 0
+    for data in raw:
+        if data.get("thread_id") not in existing_threads:
+            msg = Message(**data)
+            emails.append(msg.model_dump(mode="json"))
+            existing_threads.add(data.get("thread_id"))
+            count += 1
+    _save(emails)
+    return JsonResponse({"status": "imported", "new": count, "total": len(raw)})
 
 
 @require_POST
 def run_pipeline(request):
-    """Run full triage pipeline on all pending emails."""
-    # TODO: call agent.run_pipeline on pending emails
-    pending = Email.objects.filter(status="pending")
-    return JsonResponse({"status": "pipeline_started", "count": pending.count()})
+    # TODO: call agent.run_pipeline
+    emails = _load()
+    return JsonResponse({"status": "pipeline_started", "count": len(emails)})
