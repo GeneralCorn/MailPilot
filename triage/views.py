@@ -5,6 +5,7 @@ from django.http import JsonResponse
 from django.views.decorators.http import require_POST
 
 from .schemas import Message, Priority, State
+from .pipeline import run_tool_calls
 
 # Lower number = higher priority in sort order
 _TIER_ORDER = {p.value: i for i, p in enumerate(Priority)}
@@ -87,9 +88,12 @@ def run_pipeline(request):
     emails = _load()
     messages = [Message(**e) for e in emails]
     state = State(messages=messages)
+    state, trace = run_tool_calls(state)
     return JsonResponse(
         {
             "status": "pipeline_stub",
             "message_count": len(state.messages),
+            "tool_calls": len(trace.tool_calls),
+            "tool_results": len(trace.tool_results),
         }
     )
