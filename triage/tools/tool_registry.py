@@ -200,3 +200,17 @@ def execute_tool_call(tool_call: ToolCall) -> ToolResult:
             message=str(exc),
             data={"error_type": type(exc).__name__},
         )
+
+def apply_tool_calls(state: State) -> State:
+    """Execute all pending ToolCalls in a State and append their results."""
+    if not state.pending_calls:
+        return state
+
+    new_results: list[ToolResult] = []
+    for call in list(state.pending_calls):
+        result = execute_tool_call(call)
+        new_results.append(result)
+
+    state.results.extend(new_results)
+    state.pending_calls.clear()
+    return state
