@@ -66,6 +66,7 @@ def fetch_emails(max_results=20):
                 pass
 
         emails.append({
+            "id": msg["id"],
             "subject": headers.get("Subject", "(no subject)"),
             "sender": sender_email,
             "sender_name": sender_name,
