@@ -4,7 +4,7 @@ from django.shortcuts import render
 from django.http import JsonResponse
 from django.views.decorators.http import require_POST
 
-from .schemas import Message, Priority
+from .schemas import Message, Priority, State
 
 # Lower number = higher priority in sort order
 _TIER_ORDER = {p.value: i for i, p in enumerate(Priority)}
@@ -84,6 +84,12 @@ def import_emails(request):
 
 @require_POST
 def run_pipeline(request):
-    # TODO: call agent.run_pipeline
     emails = _load()
-    return JsonResponse({"status": "pipeline_started", "count": len(emails)})
+    messages = [Message(**e) for e in emails]
+    state = State(messages=messages)
+    return JsonResponse(
+        {
+            "status": "pipeline_stub",
+            "message_count": len(state.messages),
+        }
+    )

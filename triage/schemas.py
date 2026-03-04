@@ -58,7 +58,7 @@ class Message(BaseModel):
     received_at: datetime | None = None
     thread_id: str = ""
     source: str = "manual"
-    category: str = "unclassifed"
+    category: str = "unclassified"
 
 
 class Tool(BaseModel):
