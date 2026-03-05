@@ -14,6 +14,28 @@ DEFAULT_MODEL = "deepseek-ai/DeepSeek-V3.1"
 def get_client() -> OpenAI:
     return OpenAI(api_key=TINKER_API_KEY, base_url=TINKER_BASE_URL)
 
+class LLMResponse:
+    """Wrapper around the OpenAI response, like requests.Response."""
+
+    def __init__(self, raw):
+        self._raw = raw
+        self.text = raw.choices[0].message.content or ""
+        self.role = raw.choices[0].message.role
+        self.finish_reason = raw.choices[0].finish_reason
+        self.usage = raw.usage
+        self.model = raw.model
+
+    def json(self) -> dict:
+        """Full response as a dict."""
+        return self._raw.model_dump()
+
+    def __str__(self) -> str:
+        return self.text
+
+    def __repr__(self) -> str:
+        return f"LLMResponse(text={self.text!r:.80}, finish={self.finish_reason})"
+
+
 def chat(
     messages: list[dict[str, str]],
     *,
@@ -22,8 +44,8 @@ def chat(
     max_tokens: int = 1024,
     stop: list[str] | None = None,
     top_p: float = 1.0,
-) -> str:
-    """Send a chat completion request and return the response text."""
+) -> LLMResponse:
+    """Send a chat completion request. Returns LLMResponse with .text, .json(), .usage, etc."""
     client = get_client()
     resp = client.chat.completions.create(
         model=model,
@@ -33,4 +55,4 @@ def chat(
         stop=stop,
         top_p=top_p,
     )
-    return resp.choices[0].message.content or ""
+    return LLMResponse(resp)
