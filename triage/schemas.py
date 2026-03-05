@@ -59,6 +59,10 @@ class Message(BaseModel):
     thread_id: str = ""
     source: str = "manual"
 
+class AgentMessage(BaseModel):
+    """Minimal prompt message passed by the orchestrator."""
+    role: str
+    content: str
 
 class Tool(BaseModel):
     """Definition of an available action + its parameters."""
