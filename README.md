@@ -16,3 +16,9 @@ python3 manage.py runserver
 2. Save as `credentials.json` next to `manage.py`
 3. Add your Gmail as a test user in OAuth consent screen
 4. Click **Import Gmail** in the UI
+
+## Schema Design
+
+- Keep `triage/schemas.py` as the single source of truth for shared pipeline schemas.
+- Splitting schemas is a good design only when there is clear domain separation (for example `schemas/message.py`, `schemas/tools.py`, `schemas/trace.py`) and all callers import through one canonical package.
+- Avoid parallel/duplicate schema definitions for the same concepts, since they drift and create inconsistent behavior.
