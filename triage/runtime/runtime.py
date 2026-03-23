@@ -9,7 +9,7 @@ from triage.schemas import ToolCall, ToolResult
 from .message import DispatchMessage
 from .state import RuntimeState
 from .trace import TraceRecord, TraceEvent
-from triage.tools.tool_registry import execute_tool_call
+from triage.tools import execute_tool_call
 
 # Agent handler: (payload: dict, state: RuntimeState) -> Any
 AgentHandler = Callable[[dict[str, Any], RuntimeState], Any]
