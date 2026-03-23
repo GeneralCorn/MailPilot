@@ -4,7 +4,7 @@ from unittest.mock import patch
 import pytest
 
 from triage.schemas import Action, Status, ToolResult
-from triage.tools.tool_registry import (
+from triage.tools.actions import (
     archive_email,
     batch_label,
     create_calendar_event,
@@ -35,8 +35,8 @@ def mock_storage():
         pass   
 
     with (
-        patch("triage.tools.tool_registry._load", side_effect=fake_load),
-        patch("triage.tools.tool_registry._save", side_effect=fake_save),
+        patch("triage.tools.actions._load", side_effect=fake_load),
+        patch("triage.tools.actions._save", side_effect=fake_save),
     ):
         yield store
 
