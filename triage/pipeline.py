@@ -2,7 +2,7 @@ from datetime import datetime, timezone
 from typing import Tuple
 
 from .schemas import State, Trace, ToolCall, ToolResult
-from .tools.tool_registry import execute_tool_call
+from .tools.registry import execute_tool_call
 
 
 def run_tool_calls(state: State, trace: Trace | None = None) -> Tuple[State, Trace]:
