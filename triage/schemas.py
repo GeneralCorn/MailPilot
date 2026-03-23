@@ -60,6 +60,10 @@ class Message(BaseModel):
     source: str = "manual"
     category: str = "unclassified"
 
+class AgentMessage(BaseModel):
+    """Minimal prompt message passed by the orchestrator."""
+    role: str
+    content: str
 
 class Tool(BaseModel):
     """Definition of an available action + its parameters."""
