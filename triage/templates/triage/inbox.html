@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>MailPilot</title>
   <style>
-    :root{--bg:#fafafa;--surface:#fff;--border:#e5e7eb;--text:#1f2937;--muted:#6b7280;--accent:#2563eb;--accent-hover:#1d4ed8;--success:#059669;--r:8px}
+    :root{--bg:#fafafa;--surface:#fff;--border:#e5e7eb;--text:#1f2937;--muted:#6b7280;--accent:#2563eb;--accent-hover:#1d4ed8;--success:#059669;--danger:#dc2626;--r:8px}
     *{margin:0;padding:0;box-sizing:border-box}
     body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;background:var(--bg);color:var(--text);height:100vh;display:flex;flex-direction:column;overflow:hidden}
 
@@ -15,17 +15,31 @@
     .topbar-left{display:flex;align-items:baseline}
     .topbar-actions{display:flex;gap:8px}
 
-    .filter-bar{display:flex;gap:4px;padding:8px 24px;background:var(--surface);border-bottom:1px solid var(--border)}
+    .filter-bar{display:flex;gap:4px;padding:8px 24px;background:var(--surface);border-bottom:1px solid var(--border);position:relative}
     .tab{padding:6px 14px;border-radius:20px;font-size:13px;color:var(--muted);text-decoration:none;transition:all .15s}
     .tab:hover{background:#f3f4f6;color:var(--text)}
     .tab.active{background:var(--accent);color:#fff}
 
     .layout{display:grid;grid-template-columns:320px 1fr 300px;flex:1;overflow:hidden}
 
-    .email-list{border-right:1px solid var(--border);overflow-y:auto;background:var(--surface)}
-    .email-card{padding:14px 18px;border-bottom:1px solid var(--border);cursor:pointer;transition:background .1s}
+    .email-list{border-right:1px solid var(--border);overflow-y:auto;background:var(--surface);display:flex;flex-direction:column}
+    .list-header{display:flex;align-items:center;justify-content:space-between;padding:8px 18px;border-bottom:1px solid var(--border);min-height:38px;flex-shrink:0}
+    .list-header-left{display:flex;align-items:center;gap:8px}
+    .list-header .select-all-wrap{display:none;align-items:center;gap:6px;font-size:12px;color:var(--muted)}
+    .list-header .select-all-wrap.visible{display:flex}
+    .list-header .select-all-wrap input{margin:0}
+    .list-header .btn-delete{display:none;padding:4px 10px;border-radius:4px;border:none;font-size:11px;font-weight:500;cursor:pointer;background:#fee2e2;color:var(--danger);transition:all .15s}
+    .list-header .btn-delete:hover{background:#fecaca}
+    .list-header .btn-delete.visible{display:inline-block}
+
+    .email-cards{flex:1;overflow-y:auto}
+    .email-card{padding:14px 18px;border-bottom:1px solid var(--border);cursor:pointer;transition:background .1s;position:relative}
     .email-card:hover{background:#f9fafb}
     .email-card.selected{background:#eff6ff;border-left:3px solid var(--accent)}
+    .email-card.checked{background:#f0f4ff}
+    .card-check{position:absolute;right:8px;top:50%;transform:translateY(-50%);opacity:0;transition:opacity .15s;z-index:1}
+    .email-card:hover .card-check,.email-card.checked .card-check{opacity:1}
+    .card-check input{margin:0;cursor:pointer}
     .card-top{display:flex;justify-content:space-between;align-items:center;margin-bottom:4px}
     .card-top .sender{font-weight:600;font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:180px}
     .card-top .time{font-size:11px;color:var(--muted);white-space:nowrap}
@@ -40,7 +54,6 @@
     .preview-body{font-size:14px;line-height:1.7;white-space:pre-wrap;flex:1}
     .frame-wrap{flex:1;overflow:hidden;border-radius:var(--r);border:1px solid var(--border)}
     .preview-frame{width:133%;height:133%;border:none;transform:scale(0.75);transform-origin:0 0}
-    .preview-actions{margin-top:24px;padding-top:16px;border-top:1px solid var(--border)}
 
     .task-panel{border-left:1px solid var(--border);overflow-y:auto;background:var(--surface);padding:18px}
     .task-panel h3{font-size:15px;font-weight:600;margin-bottom:14px}
@@ -49,6 +62,7 @@
     .cat-work{background:#dbeafe;color:#1e40af}.cat-personal{background:#ede9fe;color:#5b21b6}.cat-billing{background:#d1fae5;color:#065f46}
     .cat-marketing{background:#fef3c7;color:#92400e}.cat-risk{background:#fee2e2;color:#991b1b}.cat-unclassified{background:#f3f4f6;color:#6b7280}
     .pri-critical{background:#fee2e2;color:#991b1b}.pri-high{background:#ffedd5;color:#9a3412}
+    .needs-review{background:#fef3c7;color:#92400e;border:1px solid #f59e0b}
 
     .btn{padding:8px 16px;border-radius:6px;border:none;font-size:13px;font-weight:500;cursor:pointer;transition:all .15s}
     .btn-primary{background:var(--accent);color:#fff}.btn-primary:hover{background:var(--accent-hover)}
@@ -64,8 +78,7 @@
     <span class="sub">Policy-Aware Email Triage</span>
   </div>
   <div class="topbar-actions">
-    <button class="btn btn-outline" onclick="importEmails()">Import Gmail</button>
-    <button class="btn btn-primary" onclick="runPipeline()">Run Triage</button>
+    <button class="btn btn-outline" id="importBtn" onclick="importEmails()">Import Gmail</button>
   </div>
 </header>
 
@@ -77,51 +90,46 @@
   <a href="?category=marketing" class="tab {% if current_category == 'marketing' %}active{% endif %}">Marketing</a>
   <a href="?category=risk" class="tab {% if current_category == 'risk' %}active{% endif %}">Risk</a>
   <a href="?category=unclassified" class="tab {% if current_category == 'unclassified' %}active{% endif %}">Unclassified</a>
+  <a href="/traces/" class="tab" style="margin-left:auto">Traces</a>
 </nav>
 
 <main class="layout">
   <!-- LEFT: Email List -->
   <aside class="email-list">
-    {% for email in emails %}
-    <div class="email-card {% if selected and email.idx == selected.idx %}selected{% endif %}" onclick="selectEmail({{ email.idx }})">
-      <div class="card-top">
-        <span class="sender">{{ email.sender_name|default:email.sender }}</span>
-        <span class="time">{{ email.received_at|truncatechars:16 }}</span>
-      </div>
-      <div class="card-subject">{{ email.subject }}</div>
-      <div class="card-snippet">{{ email.snippet|truncatechars:80 }}</div>
-      <div class="card-meta">
-        <span class="badge cat-{{ email.category|default:'unclassified' }}">{{ email.category|default:"unclassified" }}</span>
-        {% if email.priority == "urgent" %}<span class="badge pri-critical">urgent</span>{% elif email.priority == "important" %}<span class="badge pri-high">important</span>{% endif %}
-      </div>
+    <div class="list-header">
+      <button class="btn-delete" id="deleteBtn" onclick="deleteSelected()">Delete</button>
+      <span class="select-all-wrap" id="selectAllWrap">
+        <label for="selectAll">Select all</label>
+        <input type="checkbox" id="selectAll" onchange="toggleSelectAll(this)">
+      </span>
     </div>
-    {% empty %}
-    <div class="empty-state">No emails yet. Import from Gmail to get started.</div>
-    {% endfor %}
+    <div class="email-cards">
+      {% for email in emails %}
+      <div class="email-card {% if selected and email.idx == selected.idx %}selected{% endif %}" data-idx="{{ email.idx }}" onclick="selectEmail({{ email.idx }})">
+        <label class="card-check" onclick="event.stopPropagation()">
+          <input type="checkbox" data-idx="{{ email.idx }}" onchange="onCheckChange()">
+        </label>
+        <div class="card-top">
+          <span class="sender">{{ email.sender_name|default:email.sender }}</span>
+          <span class="time">{{ email.received_at|truncatechars:16 }}</span>
+        </div>
+        <div class="card-subject">{{ email.subject }}</div>
+        <div class="card-snippet">{{ email.snippet|truncatechars:80 }}</div>
+        <div class="card-meta">
+          <span class="badge cat-{{ email.category|default:'unclassified' }}">{{ email.category|default:"unclassified" }}</span>
+          {% if email.needs_review %}<span class="badge needs-review">needs review</span>{% endif %}
+          {% if email.priority == "urgent" %}<span class="badge pri-critical">urgent</span>{% elif email.priority == "important" %}<span class="badge pri-high">important</span>{% endif %}
+        </div>
+      </div>
+      {% empty %}
+      <div class="empty-state">No emails yet. Import from Gmail to get started.</div>
+      {% endfor %}
+    </div>
   </aside>
 
   <!-- MIDDLE: Email Preview -->
-  <section class="email-preview">
-    {% if selected %}
-    <div class="preview-header">
-      <h2>{{ selected.subject }}</h2>
-      <div class="preview-meta">
-        <span><strong>From:</strong> {{ selected.sender_name }} &lt;{{ selected.sender }}&gt;</span>
-        <span><strong>Date:</strong> {{ selected.received_at }}</span>
-      </div>
-      <div class="preview-badges">
-        <span class="badge cat-{{ selected.category|default:'unclassified' }}">{{ selected.category|default:"unclassified" }}</span>
-        {% if selected.priority == "urgent" %}<span class="badge pri-critical">urgent</span>{% elif selected.priority == "important" %}<span class="badge pri-high">important</span>{% endif %}
-      </div>
-    </div>
-    {% if selected.body_html %}
-    <div class="frame-wrap"><iframe class="preview-frame" id="email-frame" sandbox="allow-same-origin allow-scripts" srcdoc="{{ selected.body_html }}"></iframe></div>
-    {% else %}
-    <div class="preview-body">{{ selected.body_plain|linebreaksbr }}</div>
-    {% endif %}
-    {% else %}
+  <section class="email-preview" id="emailPreview">
     <div class="empty-state">Select an email to preview</div>
-    {% endif %}
   </section>
 
   <!-- RIGHT: Task Queue -->
@@ -132,11 +140,101 @@
 </main>
 
 <script>
-  function selectEmail(idx){const p=new URLSearchParams(location.search);p.set('selected',idx);location.search=p}
-  function post(url){fetch(url,{method:'POST'}).then(r=>r.json()).then(()=>location.reload()).catch(e=>alert(e))}
-  function importEmails(){post('/import/')}
-  function runPipeline(){post('/run-pipeline/')}
-  function triageEmail(idx){post('/email/'+idx+'/triage/')}
+  function selectEmail(idx){
+    // highlight card
+    document.querySelectorAll('.email-card').forEach(c=>c.classList.remove('selected'));
+    const card=document.querySelector('.email-card[data-idx="'+idx+'"]');
+    if(card)card.classList.add('selected');
+    // fetch and render preview
+    fetch('/email/'+idx+'/').then(r=>r.json()).then(renderPreview).catch(e=>console.error(e));
+  }
+
+  function renderPreview(e){
+    const cat=e.category||'unclassified';
+    const review=e.needs_review?'<span class="badge needs-review">needs review</span>':'';
+    let pri='';
+    if(e.priority==='urgent')pri='<span class="badge pri-critical">urgent</span>';
+    else if(e.priority==='important')pri='<span class="badge pri-high">important</span>';
+    let body;
+    if(e.body_html){
+      body='<div class="frame-wrap"><iframe class="preview-frame" sandbox="allow-same-origin allow-scripts" srcdoc="'+e.body_html.replace(/"/g,'&quot;')+'"></iframe></div>';
+    }else{
+      body='<div class="preview-body">'+((e.body_plain||'').replace(/\n/g,'<br>'))+'</div>';
+    }
+    document.getElementById('emailPreview').innerHTML=
+      '<div class="preview-header">'+
+        '<h2>'+e.subject+'</h2>'+
+        '<div class="preview-meta">'+
+          '<span><strong>From:</strong> '+(e.sender_name||'')+' &lt;'+e.sender+'&gt;</span>'+
+          '<span><strong>Date:</strong> '+(e.received_at||'')+'</span>'+
+        '</div>'+
+        '<div class="preview-badges">'+
+          '<span class="badge cat-'+cat+'">'+cat+'</span>'+
+          review+pri+
+        '</div>'+
+      '</div>'+body;
+  }
+
+  function post(url,opts){return fetch(url,{method:'POST',...opts}).then(r=>r.json())}
+  var _triagePoller=null;
+  function importEmails(){
+    const btn=document.getElementById('importBtn');
+    btn.disabled=true;btn.textContent='Importing...';
+    post('/import/').then(d=>{
+      location.reload();
+      // after reload, poll for triage updates
+      if(d.new>0) sessionStorage.setItem('triagePoll','1');
+    }).catch(e=>{alert(e);btn.disabled=false;btn.textContent='Import Gmail'})
+  }
+  // On page load, if triage is running, poll and reload every 5s
+  if(sessionStorage.getItem('triagePoll')){
+    _triagePoller=setInterval(()=>{
+      // check if any emails still unclassified
+      const badges=document.querySelectorAll('.badge.cat-unclassified');
+      if(badges.length===0){clearInterval(_triagePoller);sessionStorage.removeItem('triagePoll');return}
+      location.reload();
+    },5000);
+  }
+
+  function onCheckChange(){
+    const boxes=document.querySelectorAll('.card-check input[type=checkbox]');
+    const checked=[...boxes].filter(b=>b.checked);
+    const wrap=document.getElementById('selectAllWrap');
+    const btn=document.getElementById('deleteBtn');
+    const selAll=document.getElementById('selectAll');
+
+    if(checked.length>0){
+      wrap.classList.add('visible');
+      btn.classList.add('visible');
+      btn.textContent='Delete ('+checked.length+')';
+    }else{
+      wrap.classList.remove('visible');
+      btn.classList.remove('visible');
+      selAll.checked=false;
+    }
+
+    // highlight checked cards
+    boxes.forEach(b=>{
+      b.closest('.email-card').classList.toggle('checked',b.checked);
+    });
+
+    selAll.checked=checked.length===boxes.length;
+  }
+
+  function toggleSelectAll(el){
+    document.querySelectorAll('.card-check input[type=checkbox]').forEach(b=>{b.checked=el.checked});
+    onCheckChange();
+  }
+
+  function deleteSelected(){
+    const checked=[...document.querySelectorAll('.card-check input:checked')];
+    const indices=checked.map(b=>parseInt(b.dataset.idx));
+    if(!indices.length)return;
+    post('/delete-emails/',{
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({indices})
+    }).then(()=>location.reload()).catch(e=>alert(e));
+  }
 </script>
 </body>
 </html>
