@@ -6,7 +6,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Any
 
 from triage.agent import route, evaluate, rank, work
-from triage.schemas import Message
+from triage.schemas import Message, State
 
 from .state import RuntimeState
 
@@ -21,23 +21,28 @@ def _message_from_payload(payload: dict[str, Any], key: str = "email") -> Messag
     return Message(**raw) if isinstance(raw, dict) else raw
 
 
+def _pipeline_state(payload: dict[str, Any], state: RuntimeState) -> State:
+    ps = state.get_artifact("pipeline_state")
+    if ps is None:
+        ps = payload.get("pipeline_state") or State()
+        state.set_artifact("pipeline_state", ps)
+    return ps
+
+
 def router_handler(payload: dict[str, Any], state: RuntimeState) -> Any:
     """Agent: classify email into category. Payload: { \"email\": Message|dict }."""
     email = _message_from_payload(payload)
-    result = route(email)
-    state.set_artifact("router_classification", result)
-    return result
+    ps = _pipeline_state(payload, state)
+    route(email, ps)
+    return ps
 
 
 def evaluator_handler(payload: dict[str, Any], state: RuntimeState) -> Any:
-    """Agent: validate classification, gate risk. Payload: { \"email\", \"classification\" }."""
+    """Agent: validate classification, gate risk. Payload: { \"email\": Message|dict }."""
     email = _message_from_payload(payload)
-    classification = payload.get("classification") or state.get_artifact("router_classification")
-    if classification is None:
-        raise ValueError("payload must contain 'classification' or router must have run first")
-    result = evaluate(email, classification)
-    state.set_artifact("evaluator_result", result)
-    return result
+    ps = _pipeline_state(payload, state)
+    evaluate(email, ps)
+    return ps
 
 
 def ranker_handler(payload: dict[str, Any], state: RuntimeState) -> Any:
