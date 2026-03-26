@@ -103,7 +103,10 @@ def _triage_and_save(new_emails: list[dict], all_emails: list[dict]) -> None:
 
         # Update email dict and save immediately so UI reflects it
         raw["category"] = cat.value if cat else "unclassified"
-        raw["needs_review"] = review
+        if review:
+            raw["needs_review"] = True
+        else:
+            raw.pop("needs_review", None)
         _save(all_emails)
 
         results[eid] = {
