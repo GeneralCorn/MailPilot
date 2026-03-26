@@ -115,13 +115,10 @@
       </div>
     </div>
     {% if selected.body_html %}
-    <div class="frame-wrap"><iframe class="preview-frame" id="email-frame" sandbox="allow-same-origin" srcdoc="{{ selected.body_html }}"></iframe></div>
+    <div class="frame-wrap"><iframe class="preview-frame" id="email-frame" sandbox="allow-same-origin allow-scripts" srcdoc="{{ selected.body_html }}"></iframe></div>
     {% else %}
     <div class="preview-body">{{ selected.body_plain|linebreaksbr }}</div>
     {% endif %}
-    <div class="preview-actions">
-      <button class="btn btn-primary" onclick="triageEmail({{ selected.idx }})">Triage This Email</button>
-    </div>
     {% else %}
     <div class="empty-state">Select an email to preview</div>
     {% endif %}

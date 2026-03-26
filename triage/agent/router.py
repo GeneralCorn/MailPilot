@@ -1,11 +1,8 @@
 import json
-import os
 
-import anthropic
-
+from triage.llm import chat
 from triage.schemas import AgentMessage, Category, Message, State
 
-_MODEL = "claude-haiku-4-5"
 
 _SYSTEM = (
     "You are the Router in MailPilot. Classify the email into exactly one category:\n"
@@ -72,29 +69,24 @@ def build_messages(email: Message) -> list[AgentMessage]:
 
 def route(email: Message, state: State) -> None:
     """Classify email and write results into state.classifications and state.confidence_scores."""
-    client = anthropic.Anthropic(api_key=os.getenv("ANTHROPIC_API_KEY"))
-
     all_msgs = build_messages(email)
     system = next(m.content for m in all_msgs if m.role == "system")
     messages = [{"role": m.role, "content": m.content} for m in all_msgs if m.role != "system"]
+    # Prepend system as a system message for the OpenAI-compatible API
+    chat_messages = [{"role": "system", "content": system}] + messages
 
     raw = ""
     for attempt in range(2):
         try:
-            response = client.messages.create(
-                model=_MODEL,
-                max_tokens=256,
-                system=system,
-                messages=messages,
-            )
-            raw = response.content[0].text.strip()
+            resp = chat(chat_messages, max_tokens=256, temperature=0.3)
+            raw = resp.text.strip()
             data = json.loads(raw)
             state.classifications[email.id] = Category(data["category"])
             state.confidence_scores[email.id] = max(0.0, min(1.0, float(data.get("confidence", 0.5))))
             return
         except (json.JSONDecodeError, KeyError, ValueError):
             if attempt == 0:
-                messages = messages + [
+                chat_messages = chat_messages + [
                     {"role": "assistant", "content": raw},
                     {
                         "role": "user",
@@ -105,7 +97,7 @@ def route(email: Message, state: State) -> None:
                         ),
                     },
                 ]
-        except anthropic.APIError:
+        except Exception:
             break
 
     state.classifications[email.id] = Category.UNCLASSIFIED

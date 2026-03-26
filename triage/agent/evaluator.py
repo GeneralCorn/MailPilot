@@ -1,11 +1,8 @@
 import json
-import os
 
-import anthropic
-
+from triage.llm import chat
 from triage.schemas import AgentMessage, Category, Message, State
 
-_MODEL = "claude-haiku-4-5"
 _LOW_CONFIDENCE_THRESHOLD = 0.65
 _HIGH_RISK_THRESHOLD = 0.6
 
@@ -78,22 +75,16 @@ def evaluate(email: Message, state: State) -> None:
     category = state.classifications.get(email.id, Category.UNCLASSIFIED)
     confidence = state.confidence_scores.get(email.id, 0.0)
 
-    client = anthropic.Anthropic(api_key=os.getenv("ANTHROPIC_API_KEY"))
-
     all_msgs = _build_messages(email, category, confidence)
     system = next(m.content for m in all_msgs if m.role == "system")
     messages = [{"role": m.role, "content": m.content} for m in all_msgs if m.role != "system"]
+    chat_messages = [{"role": "system", "content": system}] + messages
 
     raw = ""
     for attempt in range(2):
         try:
-            response = client.messages.create(
-                model=_MODEL,
-                max_tokens=256,
-                system=system,
-                messages=messages,
-            )
-            raw = response.content[0].text.strip()
+            resp = chat(chat_messages, max_tokens=256, temperature=0.3)
+            raw = resp.text.strip()
             data = json.loads(raw)
             final_category = Category(data["final_category"])
             new_confidence = max(0.0, min(1.0, float(data.get("confidence", 0.5))))
@@ -111,7 +102,7 @@ def evaluate(email: Message, state: State) -> None:
             return
         except (json.JSONDecodeError, KeyError, ValueError):
             if attempt == 0:
-                messages = messages + [
+                chat_messages = chat_messages + [
                     {"role": "assistant", "content": raw},
                     {
                         "role": "user",
@@ -123,7 +114,7 @@ def evaluate(email: Message, state: State) -> None:
                         ),
                     },
                 ]
-        except anthropic.APIError:
+        except Exception:
             break
 
     state.risk_scores[email.id] = 0.0

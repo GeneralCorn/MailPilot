@@ -85,15 +85,25 @@ def import_emails(request):
 
 @require_POST
 def run_pipeline(request):
+    from .runtime.runtime import Runtime
+    from .runtime.agents import register_triage_agents
+    from .runtime.message import DispatchMessage
+
     emails = _load()
-    messages = [Message(**e) for e in emails]
-    state = State(messages=messages)
-    state, trace = run_tool_calls(state)
-    return JsonResponse(
-        {
-            "status": "pipeline_stub",
-            "message_count": len(state.messages),
-            "tool_calls": len(trace.tool_calls),
-            "tool_results": len(trace.tool_results),
-        }
-    )
+    rt = Runtime()
+    register_triage_agents(rt)
+
+    for raw in emails:
+        rt.dispatch(DispatchMessage(target="router", payload={"email": raw}))
+        rt.dispatch(DispatchMessage(target="evaluator", payload={"email": raw}))
+
+    ps = rt.state.get_artifact("pipeline_state")
+
+    # Write classifications back to emails.json
+    for e in emails:
+        eid = e.get("id", "")
+        if eid in ps.classifications:
+            e["category"] = ps.classifications[eid].value
+    _save(emails)
+
+    return JsonResponse({"status": "ok", "triaged": len(ps.classifications)})
