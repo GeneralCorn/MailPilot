@@ -66,6 +66,19 @@ def _build_messages(email: Message, category: Category, confidence: float) -> li
             role="assistant",
             content='{"final_category": "risk", "confidence": 0.93, "risk_score": 0.92, "needs_review": true, "explanation": "Overriding router: suspicious sender domain and urgency tactics indicate phishing despite billing framing"}',
         ),
+        AgentMessage(
+            role="user",
+            content=(
+                "Subject: Review your Google Account settings for your new account\n"
+                "Sender: no-reply@google.com\n"
+                "Body: Welcome to Google. Here are a few tips to get you started. Review and adjust your privacy and security settings any time.\n\n"
+                "Router output: Router classified as 'risk' (confidence 0.91)"
+            ),
+        ),
+        AgentMessage(
+            role="assistant",
+            content='{"final_category": "personal", "confidence": 0.92, "risk_score": 0.05, "needs_review": false, "explanation": "Overriding router: legitimate welcome email from verified google.com domain, account setup language is not a phishing indicator here"}',
+        ),
         AgentMessage(role="user", content=email_content),
     ]
 

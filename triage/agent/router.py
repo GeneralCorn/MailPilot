@@ -59,6 +59,18 @@ def build_messages(email: Message) -> list[AgentMessage]:
         AgentMessage(
             role="user",
             content=(
+                "Subject: Review your Google Account settings for your new account\n"
+                "Sender: no-reply@google.com\n"
+                "Body: Welcome to Google. Here are a few tips to get you started. Control your account: review and adjust your privacy and security settings any time."
+            ),
+        ),
+        AgentMessage(
+            role="assistant",
+            content='{"category": "personal", "confidence": 0.93, "explanation": "Legitimate account welcome email from verified Google domain, not a phishing attempt"}',
+        ),
+        AgentMessage(
+            role="user",
+            content=(
                 f"Subject: {email.subject}\n"
                 f"Sender: {email.sender}\n"
                 f"Body: {email.body_plain or email.snippet}"
