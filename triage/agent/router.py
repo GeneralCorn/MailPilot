@@ -3,7 +3,7 @@ import os
 
 import anthropic
 
-from triage.schemas import AgentMessage, Category, Message
+from triage.schemas import AgentMessage, Category, Message, State
 
 _MODEL = "claude-haiku-4-5"
 
@@ -70,7 +70,8 @@ def build_messages(email: Message) -> list[AgentMessage]:
     ]
 
 
-def route(email: Message) -> dict:
+def route(email: Message, state: State) -> None:
+    """Classify email and write results into state.classifications and state.confidence_scores."""
     client = anthropic.Anthropic(api_key=os.getenv("ANTHROPIC_API_KEY"))
 
     all_msgs = build_messages(email)
@@ -88,11 +89,9 @@ def route(email: Message) -> dict:
             )
             raw = response.content[0].text.strip()
             data = json.loads(raw)
-            return {
-                "category": Category(data["category"]),
-                "confidence": max(0.0, min(1.0, float(data.get("confidence", 0.5)))),
-                "explanation": str(data.get("explanation", "")),
-            }
+            state.classifications[email.id] = Category(data["category"])
+            state.confidence_scores[email.id] = max(0.0, min(1.0, float(data.get("confidence", 0.5))))
+            return
         except (json.JSONDecodeError, KeyError, ValueError):
             if attempt == 0:
                 messages = messages + [
@@ -109,4 +108,5 @@ def route(email: Message) -> dict:
         except anthropic.APIError:
             break
 
-    return {"category": Category.UNCLASSIFIED, "confidence": 0.0, "explanation": "classification_failed"}
+    state.classifications[email.id] = Category.UNCLASSIFIED
+    state.confidence_scores[email.id] = 0.0
