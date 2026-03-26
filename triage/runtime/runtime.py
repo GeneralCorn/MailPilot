@@ -9,7 +9,7 @@ from triage.schemas import ToolCall, ToolResult
 from .message import DispatchMessage
 from .state import RuntimeState
 from .trace import TraceRecord, TraceEvent
-from . import tools as tool_module
+from triage.tools import execute_tool_call
 
 # Agent handler: (payload: dict, state: RuntimeState) -> Any
 AgentHandler = Callable[[dict[str, Any], RuntimeState], Any]
@@ -67,7 +67,7 @@ class Runtime:
     def run_tool(self, tool_call: ToolCall) -> ToolResult:
         """Execute one tool call via the tool registry."""
         self._trace.append("runtime", "tool_call", tool=tool_call.tool.value, reason=tool_call.reason)
-        result = tool_module.run_tool(tool_call)
+        result = execute_tool_call(tool_call)
         self._trace.append(
             "runtime", "tool_result",
             tool=result.tool.value,

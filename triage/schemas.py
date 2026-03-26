@@ -58,6 +58,7 @@ class Message(BaseModel):
     received_at: datetime | None = None
     thread_id: str = ""
     source: str = "manual"
+    category: str = "unclassified"
 
 class AgentMessage(BaseModel):
     """Minimal prompt message passed by the orchestrator."""

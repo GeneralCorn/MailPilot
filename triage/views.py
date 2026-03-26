@@ -1,28 +1,15 @@
-import json
-from pathlib import Path
+from .storage import _load, _save
 
 from django.shortcuts import render
 from django.http import JsonResponse
 from django.views.decorators.http import require_POST
 
-from .schemas import Message, Priority
-
-DATA_FILE = Path(__file__).resolve().parent.parent / "database" / "emails.json"
+from .schemas import Message, Priority, State
+from .pipeline import run_tool_calls
 
 # Lower number = higher priority in sort order
 _TIER_ORDER = {p.value: i for i, p in enumerate(Priority)}
 _DEFAULT_TIER = len(Priority)
-
-
-def _load() -> list[dict]:
-    if DATA_FILE.exists():
-        return json.loads(DATA_FILE.read_text())
-    return []
-
-
-def _save(emails: list[dict]):
-    DATA_FILE.write_text(json.dumps(emails, indent=2, default=str))
-
 
 def inbox(request):
     emails = _load()
@@ -98,6 +85,15 @@ def import_emails(request):
 
 @require_POST
 def run_pipeline(request):
-    # TODO: call agent.run_pipeline
     emails = _load()
-    return JsonResponse({"status": "pipeline_started", "count": len(emails)})
+    messages = [Message(**e) for e in emails]
+    state = State(messages=messages)
+    state, trace = run_tool_calls(state)
+    return JsonResponse(
+        {
+            "status": "pipeline_stub",
+            "message_count": len(state.messages),
+            "tool_calls": len(trace.tool_calls),
+            "tool_results": len(trace.tool_results),
+        }
+    )
