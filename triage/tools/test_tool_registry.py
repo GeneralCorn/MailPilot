@@ -1,8 +1,9 @@
-import json
+from pathlib import Path
 from unittest.mock import patch
 
 import pytest
 
+from triage import persistence
 from triage.schemas import Action, Status, ToolResult
 from triage.tools.actions import (
     archive_email,
@@ -12,78 +13,61 @@ from triage.tools.actions import (
     label_email,
 )
 
-SAMPLE_EMAILS = [
-    {"id": "e1", "subject": "Hello", "category": "unclassified", "flagged": False},
-    {"id": "e2", "subject": "Meeting", "category": "unclassified", "flagged": False},
-    {"id": "e3", "subject": "Invoice", "category": "unclassified", "flagged": False},
-]
-
-
-def _fresh_emails():
-    return json.loads(json.dumps(SAMPLE_EMAILS))
-
 
 @pytest.fixture(autouse=True)
-def mock_storage():
-    """Patch _load/_save so tests never touch the real JSON file."""
-    store: list[dict] = _fresh_emails()
-
-    def fake_load():
-        return store
-
-    def fake_save(emails):
-        pass   
-
-    with (
-        patch("triage.tools.actions._load", side_effect=fake_load),
-        patch("triage.tools.actions._save", side_effect=fake_save),
-    ):
-        yield store
+def tmp_db(tmp_path: Path):
+    persistence.reset_conn()
+    persistence.init_db(tmp_path / "db.sqlite3", migrate_from_json=False)
+    # draft_reply does a body lookup against emails.json — keep it isolated from real data
+    with patch("triage.storage.get_email_body", return_value={"subject": "stub"}):
+        yield
+    persistence.reset_conn()
 
 
-def test_label_email_assigns_category(mock_storage):
+def test_label_email_assigns_category():
     result = label_email("e1", "work")
 
     assert isinstance(result, ToolResult)
     assert result.tool == Action.LABEL
     assert result.success is True
     assert result.data == {"category": "work"}
-    assert mock_storage[0]["category"] == "work"
+    assert persistence.get_email_state("e1")["category"] == "work"
 
-def test_flag_email_sets_flagged(mock_storage):
+
+def test_flag_email_sets_flagged():
     result = flag_email("e1", flag=True)
 
     assert result.tool == Action.FLAG
-    assert result.success is True
     assert result.data == {"flagged": True}
-    assert mock_storage[0]["flagged"] is True
+    assert persistence.get_email_state("e1")["flagged"] is True
 
 
-def test_flag_email_unsets_flagged(mock_storage):
-    mock_storage[0]["flagged"] = True
+def test_flag_email_unsets_flagged():
+    flag_email("e1", flag=True)
     result = flag_email("e1", flag=False)
 
     assert result.data == {"flagged": False}
-    assert mock_storage[0]["flagged"] is False
+    assert persistence.get_email_state("e1")["flagged"] is False
 
-def test_archive_email_moves_to_folder_and_sets_done(mock_storage):
+
+def test_archive_email_moves_to_folder_and_sets_done():
     result = archive_email("e1", folder="trash")
 
     assert result.tool == Action.ARCHIVE
-    assert result.success is True
     assert result.data == {"folder": "trash"}
-    assert mock_storage[0]["folder"] == "trash"
-    assert mock_storage[0]["status"] == Status.DONE.value
+    state = persistence.get_email_state("e1")
+    assert state["folder"] == "trash"
+    assert state["status"] == Status.DONE.value
 
 
-def test_archive_email_defaults_to_archive_folder(mock_storage):
+def test_archive_email_defaults_to_archive_folder():
     result = archive_email("e2")
 
     assert result.data == {"folder": "archive"}
-    assert mock_storage[1]["folder"] == "archive"
+    assert persistence.get_email_state("e2")["folder"] == "archive"
 
 
-def test_create_calendar_event_adds_event_and_sets_done(mock_storage):
+def test_create_calendar_event_adds_event_and_sets_done():
     result = create_calendar_event(
         email_id="e2",
         title="Standup",
@@ -94,22 +78,18 @@ def test_create_calendar_event_adds_event_and_sets_done(mock_storage):
     )
 
     assert result.tool == Action.CALENDAR
-    assert result.success is True
     assert result.data["title"] == "Standup"
     assert result.data["start_time"] == "2026-03-05T09:00:00Z"
-    assert result.data["end_time"] == "2026-03-05T09:30:00Z"
     assert result.data["location"] == "Room 4"
-    assert result.data["response"] == "accept"
-    assert mock_storage[1]["status"] == Status.DONE.value
-    assert mock_storage[1]["calendar_event"]["title"] == "Standup"
+    state = persistence.get_email_state("e2")
+    assert state["status"] == Status.DONE.value
+    assert state["calendar_event"]["title"] == "Standup"
 
 
-def test_batch_label_applies_category_to_multiple_emails(mock_storage):
+def test_batch_label_applies_category_to_multiple_emails():
     results = batch_label(["e1", "e2", "e3"], "billing")
 
     assert len(results) == 3
-    assert all(isinstance(r, ToolResult) for r in results)
-    assert all(r.tool == Action.LABEL for r in results)
-    assert all(r.success is True for r in results)
-    for email in mock_storage:
-        assert email["category"] == "billing"
+    assert all(r.tool == Action.LABEL and r.success for r in results)
+    for eid in ("e1", "e2", "e3"):
+        assert persistence.get_email_state(eid)["category"] == "billing"

@@ -1,59 +1,40 @@
 from datetime import datetime, timezone
 
-from ..storage import _load, _save
+from .. import persistence
 from ..schemas import Action, Priority, Status, ToolResult
-
-
-def _get_email(emails: list[dict], email_id: str) -> dict:
-    for e in emails:
-        if e.get("id") == email_id:
-            return e
-    raise KeyError(f"Email {email_id!r} not found")
 
 
 def _ok(tool: Action, message: str = "", data: dict | None = None) -> ToolResult:
     return ToolResult(tool=tool, success=True, message=message, data=data or {})
 
 
+def _utcnow() -> str:
+    return datetime.now(timezone.utc).isoformat()
+
+
 def label_email(email_id: str, category: str) -> ToolResult:
-    """Set or change email["category"] (e.g. work, personal, billing, risk, marketing)."""
-    emails = _load()
-    email = _get_email(emails, email_id)
-    email["category"] = category
-    _save(emails)
+    persistence.update_email_state(email_id, category=category)
     return _ok(Action.LABEL, f"Labelled as {category!r}", {"category": category})
 
 
 def flag_email(email_id: str, flag: bool = True) -> ToolResult:
-    """Mark an email as important / needing attention."""
-    emails = _load()
-    email = _get_email(emails, email_id)
-    email["flagged"] = flag
-    _save(emails)
+    persistence.update_email_state(email_id, flagged=bool(flag))
     return _ok(Action.FLAG, f"Flagged={flag}", {"flagged": flag})
 
 
 def archive_email(email_id: str, folder: str = "archive") -> ToolResult:
-    """Move email to a logical folder, removing it from the main inbox view."""
-    emails = _load()
-    email = _get_email(emails, email_id)
-    email["folder"] = folder
-    email["status"] = Status.DONE.value
-    _save(emails)
+    persistence.update_email_state(email_id, folder=folder, status=Status.DONE.value)
     return _ok(Action.ARCHIVE, f"Moved to {folder!r}", {"folder": folder})
 
 
 def draft_reply(email_id: str, body: str, subject_override: str = "") -> ToolResult:
-    """Attach an LLM-generated reply draft for human review (no sending)."""
-    emails = _load()
-    email = _get_email(emails, email_id)
-    email["draft_reply"] = {
-        "body": body,
-        "subject": subject_override or email.get("subject", ""),
-        "created_at": datetime.now(timezone.utc).isoformat(),
-    }
-    _save(emails)
-    return _ok(Action.REPLY_DRAFT, "Draft saved", email["draft_reply"])
+    if not subject_override:
+        from ..storage import get_email_body
+        body_row = get_email_body(email_id) or {}
+        subject_override = body_row.get("subject", "")
+    payload = {"body": body, "subject": subject_override, "created_at": _utcnow()}
+    persistence.update_email_state(email_id, draft_reply=payload)
+    return _ok(Action.REPLY_DRAFT, "Draft saved", payload)
 
 
 def create_calendar_event(
@@ -64,66 +45,43 @@ def create_calendar_event(
     location: str = "",
     response: str = "accept",
 ) -> ToolResult:
-    """Store a calendar event derived from the email."""
-    emails = _load()
-    email = _get_email(emails, email_id)
-    email["calendar_event"] = {
+    event = {
         "title": title,
         "start_time": start_time,
         "end_time": end_time,
         "location": location,
         "response": response,
     }
-    email["status"] = Status.DONE.value
-    _save(emails)
-    return _ok(Action.CALENDAR, f"Event '{title}' recorded", email["calendar_event"])
+    persistence.update_email_state(email_id, calendar_event=event, status=Status.DONE.value)
+    return _ok(Action.CALENDAR, f"Event '{title}' recorded", event)
 
 
 def escalate_email(email_id: str, target: str, reason: str) -> ToolResult:
-    """Route a risky/ambiguous email to a human reviewer."""
-    emails = _load()
-    email = _get_email(emails, email_id)
-    email["status"] = Status.FLAGGED.value
-    email.setdefault("escalations", []).append({
-        "target": target,
-        "reason": reason,
-        "at": datetime.now(timezone.utc).isoformat(),
-    })
-    _save(emails)
+    persistence.update_email_state(email_id, status=Status.FLAGGED.value)
+    persistence.append_email_list_field(
+        email_id, "escalations", {"target": target, "reason": reason, "at": _utcnow()}
+    )
     return _ok(Action.ESCALATE, f"Escalated to {target!r}", {"reason": reason})
 
 
 def no_action(email_id: str, reason: str = "") -> ToolResult:
-    """Explicitly record that no action is needed."""
     return _ok(Action.NO_ACTION, reason or "No action required", {"email_id": email_id})
 
 
 def set_status(email_id: str, status: Status) -> ToolResult:
-    emails = _load()
-    email = _get_email(emails, email_id)
-    email["status"] = status.value
-    _save(emails)
+    persistence.update_email_state(email_id, status=status.value)
     return _ok(Action.NO_ACTION, f"Status → {status.value}", {"status": status.value})
 
 
 def update_priority(email_id: str, priority: Priority, priority_rank: int) -> ToolResult:
-    emails = _load()
-    email = _get_email(emails, email_id)
-    email["priority"] = priority.value
-    email["priority_rank"] = priority_rank
-    _save(emails)
+    persistence.update_email_state(email_id, priority=priority.value, priority_rank=priority_rank)
     return _ok(Action.NO_ACTION, f"Priority → {priority.value} (rank {priority_rank})")
 
 
 def add_note(email_id: str, note: str, source: str = "") -> ToolResult:
-    emails = _load()
-    email = _get_email(emails, email_id)
-    email.setdefault("notes", []).append({
-        "text": note,
-        "source": source,
-        "at": datetime.now(timezone.utc).isoformat(),
-    })
-    _save(emails)
+    persistence.append_email_list_field(
+        email_id, "notes", {"text": note, "source": source, "at": _utcnow()}
+    )
     return _ok(Action.NO_ACTION, "Note added", {"note": note, "source": source})
 
 

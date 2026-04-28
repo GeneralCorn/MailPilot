@@ -1,4 +1,4 @@
-from .storage import _load, _save
+from .storage import _load, _save, load_inbox
 
 from django.shortcuts import render
 from django.http import JsonResponse
@@ -12,7 +12,7 @@ _TIER_ORDER = {p.value: i for i, p in enumerate(Priority)}
 _DEFAULT_TIER = len(Priority)
 
 def inbox(request):
-    emails = _load()
+    emails = load_inbox()
     category = request.GET.get("category")
     if category:
         filtered = [e for e in emails if e.get("category", "unclassified") == category]
@@ -48,7 +48,7 @@ def inbox(request):
 
 
 def email_detail(request, idx):
-    emails = _load()
+    emails = load_inbox()
     if idx >= len(emails):
         return JsonResponse({"error": "not found"}, status=404)
     return JsonResponse({"idx": idx, **emails[idx]})

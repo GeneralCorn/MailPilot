@@ -1,9 +1,11 @@
 from __future__ import annotations
 
+import json
 import sqlite3
 import threading
 from datetime import datetime, timezone
 from pathlib import Path
+from typing import Any
 
 from .schemas import State, Status
 
@@ -11,6 +13,27 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 DB_PATH = BASE_DIR / "database" / "mailpilot.sqlite3"
 
 STAGES = ("input", "router", "evaluator", "ranker", "worker")
+
+# fields that get materialized as plain columns; everything else (lists/dicts) goes JSON-encoded
+_STATE_SCALAR_FIELDS = ("category", "priority", "priority_rank", "status", "flagged", "folder", "summary")
+_STATE_JSON_FIELDS = ("draft_reply", "calendar_event", "escalations", "notes", "external_actions")
+_STATE_LIST_FIELDS = ("escalations", "notes", "external_actions")
+_STATE_ALL_FIELDS = _STATE_SCALAR_FIELDS + _STATE_JSON_FIELDS
+
+_STATE_DEFAULTS: dict[str, Any] = {
+    "category": "unclassified",
+    "priority": "",
+    "priority_rank": 9999,
+    "status": "",
+    "flagged": False,
+    "folder": "",
+    "summary": "",
+    "draft_reply": None,
+    "calendar_event": None,
+    "escalations": [],
+    "notes": [],
+    "external_actions": [],
+}
 
 _DDL = (
     """
@@ -40,6 +63,24 @@ _DDL = (
         finished_at TEXT NOT NULL
     )
     """,
+    """
+    CREATE TABLE IF NOT EXISTS email_state (
+        email_id TEXT PRIMARY KEY,
+        category TEXT,
+        priority TEXT,
+        priority_rank INTEGER,
+        status TEXT,
+        flagged INTEGER DEFAULT 0,
+        folder TEXT,
+        summary TEXT,
+        draft_reply TEXT,
+        calendar_event TEXT,
+        escalations TEXT,
+        notes TEXT,
+        external_actions TEXT,
+        updated_at TEXT NOT NULL
+    )
+    """,
 )
 
 _conn: sqlite3.Connection | None = None
@@ -51,12 +92,14 @@ def _utcnow() -> str:
     return datetime.now(timezone.utc).isoformat()
 
 
-def init_db(db_path: Path | None = None) -> sqlite3.Connection:
-    """Create tables if missing. Safe to call repeatedly."""
+def init_db(db_path: Path | None = None, *, migrate_from_json: bool = True) -> sqlite3.Connection:
+    """Create tables if missing. Safe to call repeatedly. Optionally backfills email_state from emails.json."""
     conn = get_conn(db_path)
     with conn:
         for stmt in _DDL:
             conn.execute(stmt)
+    if migrate_from_json:
+        migrate_emails_json_to_state()
     return conn
 
 
@@ -163,3 +206,125 @@ def unfinished_runs() -> list[str]:
         "SELECT run_id FROM runs WHERE finished_at IS NULL ORDER BY started_at"
     ).fetchall()
     return [r[0] for r in rows]
+
+
+# ── email_state ──
+
+def _row_to_state(row: tuple) -> dict[str, Any]:
+    cols = ("email_id", "category", "priority", "priority_rank", "status", "flagged",
+            "folder", "summary", "draft_reply", "calendar_event", "escalations",
+            "notes", "external_actions", "updated_at")
+    out = dict(zip(cols, row))
+    out["flagged"] = bool(out.get("flagged") or 0)
+    for f in _STATE_JSON_FIELDS:
+        raw = out.get(f)
+        if raw is None or raw == "":
+            out[f] = list(_STATE_DEFAULTS[f]) if isinstance(_STATE_DEFAULTS[f], list) else _STATE_DEFAULTS[f]
+        else:
+            out[f] = json.loads(raw)
+    for f in _STATE_SCALAR_FIELDS:
+        if out.get(f) is None:
+            out[f] = _STATE_DEFAULTS[f]
+    return out
+
+
+def get_email_state(email_id: str) -> dict[str, Any]:
+    """Return the email_state row as a dict; defaults filled in for missing rows or columns."""
+    conn = get_conn()
+    row = conn.execute(
+        "SELECT email_id, category, priority, priority_rank, status, flagged, "
+        "folder, summary, draft_reply, calendar_event, escalations, notes, "
+        "external_actions, updated_at FROM email_state WHERE email_id=?",
+        (email_id,),
+    ).fetchone()
+    if row is None:
+        return {"email_id": email_id, **{k: (list(v) if isinstance(v, list) else v) for k, v in _STATE_DEFAULTS.items()}}
+    return _row_to_state(row)
+
+
+def list_email_states(email_ids: list[str] | None = None) -> dict[str, dict[str, Any]]:
+    conn = get_conn()
+    if email_ids is None:
+        rows = conn.execute(
+            "SELECT email_id, category, priority, priority_rank, status, flagged, "
+            "folder, summary, draft_reply, calendar_event, escalations, notes, "
+            "external_actions, updated_at FROM email_state"
+        ).fetchall()
+    elif not email_ids:
+        return {}
+    else:
+        placeholders = ",".join(["?"] * len(email_ids))
+        rows = conn.execute(
+            f"SELECT email_id, category, priority, priority_rank, status, flagged, "
+            f"folder, summary, draft_reply, calendar_event, escalations, notes, "
+            f"external_actions, updated_at FROM email_state WHERE email_id IN ({placeholders})",
+            tuple(email_ids),
+        ).fetchall()
+    return {r[0]: _row_to_state(r) for r in rows}
+
+
+def update_email_state(email_id: str, **fields: Any) -> None:
+    """Upsert: insert row if missing, otherwise patch the given fields. JSON-encodes list/dict fields."""
+    if not fields:
+        return
+    unknown = set(fields) - set(_STATE_ALL_FIELDS)
+    if unknown:
+        raise ValueError(f"unknown email_state fields: {sorted(unknown)}")
+
+    encoded: dict[str, Any] = {}
+    for k, v in fields.items():
+        if k in _STATE_JSON_FIELDS:
+            encoded[k] = json.dumps(v) if v is not None else None
+        elif k == "flagged":
+            encoded[k] = int(bool(v))
+        else:
+            encoded[k] = v
+
+    conn = get_conn()
+    cols = list(encoded.keys())
+    placeholders = ",".join(["?"] * (len(cols) + 2))
+    insert_cols = ["email_id"] + cols + ["updated_at"]
+    insert_vals = [email_id] + [encoded[c] for c in cols] + [_utcnow()]
+    update_clause = ", ".join([f"{c}=excluded.{c}" for c in cols] + ["updated_at=excluded.updated_at"])
+    conn.execute(
+        f"INSERT INTO email_state ({','.join(insert_cols)}) VALUES ({placeholders}) "
+        f"ON CONFLICT(email_id) DO UPDATE SET {update_clause}",
+        tuple(insert_vals),
+    )
+
+
+def append_email_list_field(email_id: str, field: str, value: Any) -> None:
+    """Append to a JSON-list field (escalations / notes / external_actions)."""
+    if field not in _STATE_LIST_FIELDS:
+        raise ValueError(f"{field!r} is not a list field; expected one of {_STATE_LIST_FIELDS}")
+    current = get_email_state(email_id)[field]
+    update_email_state(email_id, **{field: [*current, value]})
+
+
+def migrate_emails_json_to_state() -> int:
+    """One-shot: copy state-like fields from emails.json into the email_state table.
+    No-op if email_state already has rows or emails.json is missing/empty.
+    """
+    conn = get_conn()
+    existing = conn.execute("SELECT COUNT(*) FROM email_state").fetchone()[0]
+    if existing:
+        return 0
+
+    from .storage import _load
+    emails = _load()
+    written = 0
+    for e in emails:
+        eid = e.get("id")
+        if not eid:
+            continue
+        fields = {}
+        for f in _STATE_SCALAR_FIELDS:
+            if f in e:
+                fields[f] = e[f]
+        for f in _STATE_JSON_FIELDS:
+            if f in e:
+                fields[f] = e[f]
+        if fields:
+            update_email_state(eid, **fields)
+            written += 1
+    return written

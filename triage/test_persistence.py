@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+import json
 from pathlib import Path
+from unittest.mock import patch
 
 import pytest
 
@@ -13,7 +15,7 @@ from triage.schemas import Category, Message, State, Status
 def tmp_db(tmp_path: Path):
     persistence.reset_conn()
     db = tmp_path / "mailpilot.sqlite3"
-    persistence.init_db(db)
+    persistence.init_db(db, migrate_from_json=False)
     yield db
     persistence.reset_conn()
 
@@ -99,3 +101,85 @@ def test_resume_stage_index(tmp_db):
     stages = ("input", "router", "evaluator", "ranker", "worker")
     assert wrapper.resume_stage_index("r1", "e1", stages) == 3
     assert wrapper.resume_stage_index("r1", "e_unknown", stages) == 0
+
+
+def test_email_state_defaults_for_unknown_id(tmp_db):
+    s = persistence.get_email_state("nope")
+    assert s["category"] == "unclassified"
+    assert s["flagged"] is False
+    assert s["escalations"] == []
+    assert s["draft_reply"] is None
+
+
+def test_email_state_roundtrip_scalar_and_json(tmp_db):
+    persistence.update_email_state("e1", category="work", flagged=True, status="done")
+    persistence.update_email_state("e1", calendar_event={"title": "Standup"})
+
+    s = persistence.get_email_state("e1")
+    assert s["category"] == "work"
+    assert s["flagged"] is True
+    assert s["status"] == "done"
+    assert s["calendar_event"] == {"title": "Standup"}
+
+
+def test_email_state_partial_update_does_not_clobber_other_fields(tmp_db):
+    persistence.update_email_state("e1", category="work", flagged=True)
+    persistence.update_email_state("e1", status="done")
+
+    s = persistence.get_email_state("e1")
+    assert s["category"] == "work"
+    assert s["flagged"] is True
+    assert s["status"] == "done"
+
+
+def test_append_email_list_field_does_not_overwrite(tmp_db):
+    persistence.append_email_list_field("e1", "notes", {"text": "first"})
+    persistence.append_email_list_field("e1", "notes", {"text": "second"})
+
+    notes = persistence.get_email_state("e1")["notes"]
+    assert [n["text"] for n in notes] == ["first", "second"]
+
+
+def test_append_email_list_field_rejects_unknown_field(tmp_db):
+    with pytest.raises(ValueError):
+        persistence.append_email_list_field("e1", "category", "x")
+
+
+def test_update_email_state_rejects_unknown_field(tmp_db):
+    with pytest.raises(ValueError):
+        persistence.update_email_state("e1", bogus="x")
+
+
+def test_list_email_states_returns_only_requested_ids(tmp_db):
+    persistence.update_email_state("e1", category="work")
+    persistence.update_email_state("e2", category="personal")
+    persistence.update_email_state("e3", category="risk")
+
+    out = persistence.list_email_states(["e1", "e3"])
+    assert set(out.keys()) == {"e1", "e3"}
+    assert out["e1"]["category"] == "work"
+    assert out["e3"]["category"] == "risk"
+
+
+def test_migrate_emails_json_to_state(tmp_path: Path, tmp_db):
+    fake_emails = [
+        {"id": "e1", "subject": "hi", "category": "work", "flagged": True, "status": "done"},
+        {"id": "e2", "subject": "yo", "category": "personal",
+         "calendar_event": {"title": "Standup"}, "notes": [{"text": "hey"}]},
+    ]
+    with patch("triage.storage._load", return_value=fake_emails):
+        written = persistence.migrate_emails_json_to_state()
+    assert written == 2
+    assert persistence.get_email_state("e1")["category"] == "work"
+    assert persistence.get_email_state("e1")["flagged"] is True
+    assert persistence.get_email_state("e2")["calendar_event"]["title"] == "Standup"
+    assert persistence.get_email_state("e2")["notes"] == [{"text": "hey"}]
+
+
+def test_migrate_emails_json_to_state_is_idempotent(tmp_path: Path, tmp_db):
+    fake_emails = [{"id": "e1", "subject": "x", "category": "work"}]
+    with patch("triage.storage._load", return_value=fake_emails):
+        first = persistence.migrate_emails_json_to_state()
+        second = persistence.migrate_emails_json_to_state()
+    assert first == 1
+    assert second == 0  # second call must not re-write
