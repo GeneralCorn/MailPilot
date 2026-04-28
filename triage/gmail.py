@@ -1,5 +1,6 @@
-"""Gmail API integration — OAuth + fetch emails."""
+"""Gmail/Calendar integration — OAuth + fetch + send + calendar events."""
 import base64
+from email.mime.text import MIMEText
 from email.utils import parseaddr, parsedate_to_datetime
 from pathlib import Path
 
@@ -9,24 +10,59 @@ from google_auth_oauthlib.flow import InstalledAppFlow
 from googleapiclient.discovery import build
 
 BASE_DIR = Path(__file__).resolve().parent.parent
-SCOPES = ["https://www.googleapis.com/auth/gmail.readonly"]
+SCOPES = [
+    "https://www.googleapis.com/auth/gmail.readonly",
+    "https://www.googleapis.com/auth/gmail.send",
+    "https://www.googleapis.com/auth/gmail.compose",
+    "https://www.googleapis.com/auth/calendar.events",
+]
 CREDENTIALS_FILE = BASE_DIR / "credentials.json"
 TOKEN_FILE = BASE_DIR / "token.json"
 
 
-def get_gmail_service():
-    """Authenticate and return a Gmail API service object."""
+def _has_required_scopes(creds: Credentials) -> bool:
+    granted = set(creds.scopes or [])
+    return set(SCOPES).issubset(granted)
+
+
+def _get_credentials() -> Credentials:
     creds = None
     if TOKEN_FILE.exists():
         creds = Credentials.from_authorized_user_file(str(TOKEN_FILE), SCOPES)
-    if not creds or not creds.valid:
-        if creds and creds.expired and creds.refresh_token:
-            creds.refresh(Request())
-        else:
-            flow = InstalledAppFlow.from_client_secrets_file(str(CREDENTIALS_FILE), SCOPES)
-            creds = flow.run_local_server(port=9090)
+    needs_reauth = (
+        creds is None
+        or not _has_required_scopes(creds)
+        or (not creds.valid and not (creds.expired and creds.refresh_token))
+    )
+    if needs_reauth:
+        flow = InstalledAppFlow.from_client_secrets_file(str(CREDENTIALS_FILE), SCOPES)
+        creds = flow.run_local_server(port=9090)
         TOKEN_FILE.write_text(creds.to_json())
-    return build("gmail", "v1", credentials=creds)
+    elif not creds.valid and creds.expired and creds.refresh_token:
+        creds.refresh(Request())
+        TOKEN_FILE.write_text(creds.to_json())
+    return creds
+
+
+def get_gmail_service():
+    return build("gmail", "v1", credentials=_get_credentials())
+
+
+def get_calendar_service():
+    return build("calendar", "v3", credentials=_get_credentials())
+
+
+def send_email(to: str, subject: str, body: str, thread_id: str | None = None) -> dict:
+    """Send a plain-text email via Gmail. Returns the Gmail message resource."""
+    service = get_gmail_service()
+    msg = MIMEText(body)
+    msg["to"] = to
+    msg["subject"] = subject
+    raw = base64.urlsafe_b64encode(msg.as_bytes()).decode()
+    payload: dict = {"raw": raw}
+    if thread_id:
+        payload["threadId"] = thread_id
+    return service.users().messages().send(userId="me", body=payload).execute()
 
 
 def _extract_part(payload, mime_type):
