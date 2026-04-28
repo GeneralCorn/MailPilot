@@ -16,8 +16,8 @@ STAGES = ("input", "router", "evaluator", "ranker", "worker")
 
 # fields that get materialized as plain columns; everything else (lists/dicts) goes JSON-encoded
 _STATE_SCALAR_FIELDS = ("category", "priority", "priority_rank", "status", "flagged", "folder", "summary")
-_STATE_JSON_FIELDS = ("draft_reply", "calendar_event", "escalations", "notes", "external_actions")
-_STATE_LIST_FIELDS = ("escalations", "notes", "external_actions")
+_STATE_JSON_FIELDS = ("draft_reply", "calendar_event", "escalations", "notes", "external_actions", "proposed_actions")
+_STATE_LIST_FIELDS = ("escalations", "notes", "external_actions", "proposed_actions")
 _STATE_ALL_FIELDS = _STATE_SCALAR_FIELDS + _STATE_JSON_FIELDS
 
 _STATE_DEFAULTS: dict[str, Any] = {
@@ -33,6 +33,7 @@ _STATE_DEFAULTS: dict[str, Any] = {
     "escalations": [],
     "notes": [],
     "external_actions": [],
+    "proposed_actions": [],
 }
 
 _DDL = (
@@ -78,9 +79,15 @@ _DDL = (
         escalations TEXT,
         notes TEXT,
         external_actions TEXT,
+        proposed_actions TEXT,
         updated_at TEXT NOT NULL
     )
     """,
+)
+
+# columns added after initial release; ALTER TABLE on existing DBs
+_ADDED_EMAIL_STATE_COLUMNS = (
+    ("proposed_actions", "TEXT"),
 )
 
 _conn_storage = threading.local()
@@ -98,6 +105,11 @@ def init_db(db_path: Path | None = None, *, migrate_from_json: bool = True) -> s
     with conn:
         for stmt in _DDL:
             conn.execute(stmt)
+        for col, decl in _ADDED_EMAIL_STATE_COLUMNS:
+            try:
+                conn.execute(f"ALTER TABLE email_state ADD COLUMN {col} {decl}")
+            except sqlite3.OperationalError:
+                pass  # column already exists
     if migrate_from_json:
         migrate_emails_json_to_state()
     return conn
@@ -227,7 +239,7 @@ def unfinished_runs() -> list[str]:
 def _row_to_state(row: tuple) -> dict[str, Any]:
     cols = ("email_id", "category", "priority", "priority_rank", "status", "flagged",
             "folder", "summary", "draft_reply", "calendar_event", "escalations",
-            "notes", "external_actions", "updated_at")
+            "notes", "external_actions", "proposed_actions", "updated_at")
     out = dict(zip(cols, row))
     out["flagged"] = bool(out.get("flagged") or 0)
     for f in _STATE_JSON_FIELDS:
@@ -248,7 +260,7 @@ def get_email_state(email_id: str) -> dict[str, Any]:
     row = conn.execute(
         "SELECT email_id, category, priority, priority_rank, status, flagged, "
         "folder, summary, draft_reply, calendar_event, escalations, notes, "
-        "external_actions, updated_at FROM email_state WHERE email_id=?",
+        "external_actions, proposed_actions, updated_at FROM email_state WHERE email_id=?",
         (email_id,),
     ).fetchone()
     if row is None:
@@ -262,7 +274,7 @@ def list_email_states(email_ids: list[str] | None = None) -> dict[str, dict[str,
         rows = conn.execute(
             "SELECT email_id, category, priority, priority_rank, status, flagged, "
             "folder, summary, draft_reply, calendar_event, escalations, notes, "
-            "external_actions, updated_at FROM email_state"
+            "external_actions, proposed_actions, updated_at FROM email_state"
         ).fetchall()
     elif not email_ids:
         return {}
@@ -271,7 +283,7 @@ def list_email_states(email_ids: list[str] | None = None) -> dict[str, dict[str,
         rows = conn.execute(
             f"SELECT email_id, category, priority, priority_rank, status, flagged, "
             f"folder, summary, draft_reply, calendar_event, escalations, notes, "
-            f"external_actions, updated_at FROM email_state WHERE email_id IN ({placeholders})",
+            f"external_actions, proposed_actions, updated_at FROM email_state WHERE email_id IN ({placeholders})",
             tuple(email_ids),
         ).fetchall()
     return {r[0]: _row_to_state(r) for r in rows}
@@ -308,11 +320,37 @@ def update_email_state(email_id: str, **fields: Any) -> None:
 
 
 def append_email_list_field(email_id: str, field: str, value: Any) -> None:
-    """Append to a JSON-list field (escalations / notes / external_actions)."""
+    """Append to a JSON-list field (escalations / notes / external_actions / proposed_actions)."""
     if field not in _STATE_LIST_FIELDS:
         raise ValueError(f"{field!r} is not a list field; expected one of {_STATE_LIST_FIELDS}")
     current = get_email_state(email_id)[field]
     update_email_state(email_id, **{field: [*current, value]})
+
+
+def has_pending_proposals(email_id: str) -> bool:
+    return bool(get_email_state(email_id).get("proposed_actions"))
+
+
+def remove_proposed_action(email_id: str, idx: int) -> dict | None:
+    """Remove the i-th proposed action; return the removed dict, or None if idx out of range."""
+    current = list(get_email_state(email_id).get("proposed_actions") or [])
+    if idx < 0 or idx >= len(current):
+        return None
+    removed = current.pop(idx)
+    update_email_state(email_id, proposed_actions=current)
+    return removed
+
+
+def update_proposed_action(email_id: str, idx: int, parameters: dict) -> dict | None:
+    """Merge `parameters` into the i-th proposed action's parameters dict; return the updated dict."""
+    current = list(get_email_state(email_id).get("proposed_actions") or [])
+    if idx < 0 or idx >= len(current):
+        return None
+    entry = dict(current[idx])
+    entry["parameters"] = {**(entry.get("parameters") or {}), **parameters}
+    current[idx] = entry
+    update_email_state(email_id, proposed_actions=current)
+    return entry
 
 
 def migrate_emails_json_to_state() -> int:

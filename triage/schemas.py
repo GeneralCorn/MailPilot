@@ -30,6 +30,7 @@ class Status(str, Enum):
     DONE = "done"
     PARTIAL_DONE = "partial_done"
     FLAGGED = "flagged"
+    AWAITING_APPROVAL = "awaiting_approval"
 
 
 class Action(str, Enum):
@@ -105,6 +106,8 @@ class State(BaseModel):
     iteration_counts: dict[str, int] = Field(default_factory=dict)
     # router's first-iteration output, preserved before evaluator can override classifications
     router_outputs: dict[str, dict[str, Any]] = Field(default_factory=dict)
+    # actions Worker proposed but defers to user approval (calendar / send_email)
+    proposed_actions: dict[str, list[ToolCall]] = Field(default_factory=dict)
 
 
 class Trace(BaseModel):

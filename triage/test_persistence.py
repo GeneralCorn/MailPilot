@@ -183,3 +183,45 @@ def test_migrate_emails_json_to_state_is_idempotent(tmp_path: Path, tmp_db):
         second = persistence.migrate_emails_json_to_state()
     assert first == 1
     assert second == 0  # second call must not re-write
+
+
+def test_proposed_actions_roundtrip_and_helpers(tmp_db):
+    persistence.update_email_state(
+        "e1",
+        proposed_actions=[
+            {"tool": "calendar", "parameters": {"title": "A", "start_time": "t1"}},
+            {"tool": "send_email", "parameters": {"kind": "rsvp", "decision": "accept", "body": "ok"}},
+        ],
+    )
+    assert persistence.has_pending_proposals("e1") is True
+    assert not persistence.has_pending_proposals("e2")
+
+    updated = persistence.update_proposed_action("e1", 0, {"start_time": "t2", "location": "Room 4"})
+    assert updated["parameters"]["start_time"] == "t2"
+    assert updated["parameters"]["location"] == "Room 4"
+    assert updated["parameters"]["title"] == "A"  # original key preserved
+
+    removed = persistence.remove_proposed_action("e1", 0)
+    assert removed["tool"] == "calendar"
+    rest = persistence.get_email_state("e1")["proposed_actions"]
+    assert len(rest) == 1
+    assert rest[0]["tool"] == "send_email"
+
+    # remove last → should clear
+    persistence.remove_proposed_action("e1", 0)
+    assert persistence.has_pending_proposals("e1") is False
+
+
+def test_proposed_action_helpers_handle_out_of_range(tmp_db):
+    assert persistence.remove_proposed_action("nope", 0) is None
+    assert persistence.update_proposed_action("nope", 0, {"x": 1}) is None
+
+
+def test_init_db_is_idempotent_with_added_columns(tmp_path: Path):
+    persistence.reset_conn()
+    db = tmp_path / "db.sqlite3"
+    persistence.init_db(db, migrate_from_json=False)
+    persistence.init_db(db, migrate_from_json=False)  # second call must not raise
+    persistence.update_email_state("e1", proposed_actions=[{"tool": "calendar"}])
+    assert persistence.has_pending_proposals("e1")
+    persistence.reset_conn()
