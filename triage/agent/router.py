@@ -5,7 +5,7 @@ import anthropic
 
 from triage.schemas import AgentMessage, Category, Message, State
 
-_MODEL = "claude-haiku-4-5"
+_MODEL = "claude-sonnet-4-6"
 
 _SYSTEM = (
     "You are the Router in MailPilot. Classify the email into exactly one category:\n"
@@ -95,7 +95,7 @@ def route(email: Message, state: State) -> None:
         try:
             response = client.messages.create(
                 model=_MODEL,
-                max_tokens=256,
+                max_tokens=512,
                 system=system,
                 messages=messages,
             )
