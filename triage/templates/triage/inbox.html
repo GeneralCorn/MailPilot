@@ -44,6 +44,17 @@
 
     .task-panel{border-left:1px solid var(--border);overflow-y:auto;background:var(--surface);padding:18px}
     .task-panel h3{font-size:15px;font-weight:600;margin-bottom:14px}
+    .task-list{list-style:none;display:flex;flex-direction:column;gap:8px}
+    .task-item{padding:10px 12px;border:1px solid var(--border);border-radius:6px;background:#fff;cursor:pointer;transition:background .15s}
+    .task-item:hover{background:#f9fafb}
+    .task-status{display:inline-block;padding:2px 8px;border-radius:10px;font-size:10px;font-weight:600;text-transform:uppercase;margin-bottom:6px;letter-spacing:.3px}
+    .status-done{background:#d1fae5;color:#065f46}
+    .status-flagged{background:#fee2e2;color:#991b1b}
+    .status-partial_done{background:#fef3c7;color:#92400e}
+    .status-pending{background:#e0e7ff;color:#3730a3}
+    .task-subject{font-size:13px;font-weight:500;color:var(--text);line-height:1.4;margin-bottom:3px}
+    .task-meta{font-size:11px;color:var(--muted);margin-bottom:6px}
+    .task-reason{font-size:11px;color:var(--muted);font-style:italic;line-height:1.4;border-top:1px solid var(--border);padding-top:6px;margin-top:4px}
 
     .badge{display:inline-block;padding:2px 10px;border-radius:12px;font-size:11px;font-weight:500;background:#f3f4f6;color:var(--muted)}
     .cat-work{background:#dbeafe;color:#1e40af}.cat-personal{background:#ede9fe;color:#5b21b6}.cat-billing{background:#d1fae5;color:#065f46}

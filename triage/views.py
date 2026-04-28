@@ -12,6 +12,8 @@ _TIER_ORDER = {p.value: i for i, p in enumerate(Priority)}
 _DEFAULT_TIER = len(Priority)
 
 _ATTENTION_STATUSES = {"flagged", "partial_done", "pending"}
+_PROCESSED_STATUSES = _ATTENTION_STATUSES | {"done"}
+_TASK_QUEUE_LIMIT = 20
 
 
 def inbox(request):
@@ -52,28 +54,43 @@ def inbox(request):
 
 
 def _build_task_queue(emails: list[dict]) -> list[dict]:
-    """Emails that worked but need follow-up: flagged / partial_done / pending."""
-    out: list[dict] = []
+    """Activity feed of triaged emails: attention items first, then recent done items.
+    Anything not yet triaged (no status) is excluded.
+    """
+    attention: list[dict] = []
+    done: list[dict] = []
     for i, e in enumerate(emails):
         status = (e.get("status") or "").strip()
+        if status not in _PROCESSED_STATUSES:
+            continue
+
         escalations = e.get("escalations") or []
         notes = e.get("notes") or []
+        summary = (e.get("summary") or "").strip()
+
+        reason = ""
+        if escalations:
+            reason = escalations[-1].get("reason", "")
+        elif summary:
+            reason = summary
+        elif notes:
+            reason = notes[-1].get("text", "")
+
+        item = {
+            "idx": i,
+            "subject": e.get("subject", "(no subject)"),
+            "sender": e.get("sender", ""),
+            "status_label": status,
+            "category": e.get("category", ""),
+            "reason": reason,
+        }
+
         if status in _ATTENTION_STATUSES or escalations:
-            label = status or ("flagged" if escalations else "")
-            reason = ""
-            if escalations:
-                reason = escalations[-1].get("reason", "")
-            elif notes:
-                reason = notes[-1].get("text", "")
-            out.append({
-                "idx": i,
-                "subject": e.get("subject", "(no subject)"),
-                "sender": e.get("sender", ""),
-                "status_label": label,
-                "category": e.get("category", ""),
-                "reason": reason,
-            })
-    return out
+            attention.append(item)
+        else:
+            done.append(item)
+
+    return (attention + done)[:_TASK_QUEUE_LIMIT]
 
 
 def email_detail(request, idx):
