@@ -6,6 +6,8 @@ import anthropic
 
 from triage.schemas import AgentMessage, Category, Message, State
 
+from ._caching import to_cached_request
+
 _MODEL = "claude-sonnet-4-6"
 LOW_CONFIDENCE_THRESHOLD = 0.65
 HIGH_RISK_THRESHOLD = 0.6
@@ -108,8 +110,7 @@ def evaluate(email: Message, state: State) -> EvaluatorResult:
     client = anthropic.Anthropic(api_key=os.getenv("ANTHROPIC_API_KEY"))
 
     all_msgs = _build_messages(email, category, confidence)
-    system = next(m.content for m in all_msgs if m.role == "system")
-    messages = [{"role": m.role, "content": m.content} for m in all_msgs if m.role != "system"]
+    system, messages = to_cached_request(all_msgs)
 
     raw = ""
     for attempt in range(2):

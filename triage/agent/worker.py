@@ -18,6 +18,8 @@ from triage.schemas import (
     ToolResult,
 )
 
+from ._caching import to_cached_request
+
 if TYPE_CHECKING:
     from triage.runtime import Runtime
 
@@ -146,8 +148,7 @@ def plan_actions(
     category = state.classifications.get(email.id, Category.UNCLASSIFIED)
     client = anthropic.Anthropic(api_key=os.getenv("ANTHROPIC_API_KEY"))
     all_msgs = _build_messages(email, category, prior_results)
-    system = next(m.content for m in all_msgs if m.role == "system")
-    messages = [{"role": m.role, "content": m.content} for m in all_msgs if m.role != "system"]
+    system, messages = to_cached_request(all_msgs)
 
     raw = ""
     for attempt in range(2):

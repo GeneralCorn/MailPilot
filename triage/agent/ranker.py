@@ -6,6 +6,8 @@ import anthropic
 
 from triage.schemas import AgentMessage, Category, Priority, State
 
+from ._caching import to_cached_request
+
 _MODEL = "claude-sonnet-4-6"
 MAX_BATCH = 100
 
@@ -132,8 +134,7 @@ def rank(state: State) -> None:
 
     client = anthropic.Anthropic(api_key=os.getenv("ANTHROPIC_API_KEY"))
     all_msgs = _build_messages(_build_batch(state, batch))
-    system = next(m.content for m in all_msgs if m.role == "system")
-    messages = [{"role": m.role, "content": m.content} for m in all_msgs if m.role != "system"]
+    system, messages = to_cached_request(all_msgs)
 
     raw = ""
     for attempt in range(2):

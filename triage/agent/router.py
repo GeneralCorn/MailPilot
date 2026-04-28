@@ -5,6 +5,8 @@ import anthropic
 
 from triage.schemas import AgentMessage, Category, Message, State
 
+from ._caching import to_cached_request
+
 _MODEL = "claude-sonnet-4-6"
 
 _SYSTEM = (
@@ -100,8 +102,7 @@ def route(email: Message, state: State, *, feedback: str | None = None) -> None:
     client = anthropic.Anthropic(api_key=os.getenv("ANTHROPIC_API_KEY"))
 
     all_msgs = build_messages(email, feedback=feedback)
-    system = next(m.content for m in all_msgs if m.role == "system")
-    messages = [{"role": m.role, "content": m.content} for m in all_msgs if m.role != "system"]
+    system, messages = to_cached_request(all_msgs)
 
     raw = ""
     for attempt in range(2):
