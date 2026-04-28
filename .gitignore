@@ -60,6 +60,10 @@ cover/
 local_settings.py
 db.sqlite3
 db.sqlite3-journal
+database/mailpilot.sqlite3
+database/mailpilot.sqlite3-journal
+database/mailpilot.sqlite3-wal
+database/mailpilot.sqlite3-shm
 credentials.json
 token.json
 
