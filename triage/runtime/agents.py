@@ -46,11 +46,10 @@ def evaluator_handler(payload: dict[str, Any], state: RuntimeState) -> Any:
 
 
 def ranker_handler(payload: dict[str, Any], state: RuntimeState) -> Any:
-    """Agent: score and order emails. Payload: { \"emails\": list }."""
-    emails = payload.get("emails", [])
-    result = rank(emails)
-    state.set_artifact("rank_result", result)
-    return result
+    """Agent: score and order emails. Payload: { \"pipeline_state\": State|dict } (optional)."""
+    ps = _pipeline_state(payload, state)
+    rank(ps)
+    return ps
 
 
 def worker_handler(payload: dict[str, Any], state: RuntimeState) -> Any:

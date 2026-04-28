@@ -1,5 +1,174 @@
-from triage.schemas import Message
+import json
+import os
+from datetime import datetime, timezone
+
+import anthropic
+
+from triage.schemas import AgentMessage, Category, Priority, State
+
+_MODEL = "claude-sonnet-4-6"
+MAX_BATCH = 100
+
+_SYSTEM = (
+    "You are the Ranker in MailPilot. Given a batch of classified emails, assign each one a "
+    "priority tier and a numeric score in [0, 1].\n\n"
+    "Priority tiers (highest first): urgent, important, normal, low, minimal.\n"
+    "Score: 1.0 = top of queue, 0.0 = bottom.\n\n"
+    "Guidance:\n"
+    "- urgency cues (deadlines, RSVPs, time-sensitive asks) raise priority\n"
+    "- sender role and category matter: work > billing > personal > marketing\n"
+    "- emails classified as 'risk' get low/minimal priority — they will be flagged for human "
+    "review, not acted on automatically, so they should not block the queue\n"
+    "- keep scores spread across the [0, 1] range so the queue is well-ordered\n\n"
+    "Respond with valid JSON only, no other text:\n"
+    '{"ranked":[{"email_id":"<id>","score":<0.0-1.0>,'
+    '"priority":"<urgent|important|normal|low|minimal>","reason":"<brief>"}]}'
+)
 
 
-def rank(emails: list[Message]) -> list[tuple[str, float]]:
-    pass
+_FEWSHOT_INPUT_1 = json.dumps(
+    [
+        {"id": "e1", "subject": "Q3 planning — please RSVP by EOD",
+         "sender": "manager@acme.com", "category": "work",
+         "confidence": 0.9, "risk_score": 0.05},
+        {"id": "e2", "subject": "Black Friday — 60% off everything",
+         "sender": "deals@shop.com", "category": "marketing",
+         "confidence": 0.96, "risk_score": 0.02},
+        {"id": "e3", "subject": "Invoice #4421 — paid",
+         "sender": "billing@vendor.com", "category": "billing",
+         "confidence": 0.93, "risk_score": 0.04},
+    ],
+    indent=2,
+)
+
+_FEWSHOT_OUTPUT_1 = (
+    '{"ranked":['
+    '{"email_id":"e1","score":0.92,"priority":"urgent","reason":"RSVP needed by end of day"},'
+    '{"email_id":"e3","score":0.45,"priority":"normal","reason":"routine paid receipt"},'
+    '{"email_id":"e2","score":0.08,"priority":"minimal","reason":"promotional, no action expected"}'
+    "]}"
+)
+
+_FEWSHOT_INPUT_2 = json.dumps(
+    [
+        {"id": "a", "subject": "Project status update",
+         "sender": "lead@acme.com", "category": "work",
+         "confidence": 0.88, "risk_score": 0.04},
+        {"id": "b", "subject": "URGENT: Verify your account NOW",
+         "sender": "support@secure-bank-verify.ru", "category": "risk",
+         "confidence": 0.94, "risk_score": 0.96},
+        {"id": "c", "subject": "Coffee Friday?",
+         "sender": "alex@gmail.com", "category": "personal",
+         "confidence": 0.85, "risk_score": 0.02},
+    ],
+    indent=2,
+)
+
+_FEWSHOT_OUTPUT_2 = (
+    '{"ranked":['
+    '{"email_id":"a","score":0.7,"priority":"important","reason":"work status, not deadline-bound"},'
+    '{"email_id":"c","score":0.35,"priority":"low","reason":"casual social, no time pressure"},'
+    '{"email_id":"b","score":0.1,"priority":"minimal","reason":"phishing — flagged for review, queue position should not block real work"}'
+    "]}"
+)
+
+
+def _build_messages(batch_json: str) -> list[AgentMessage]:
+    return [
+        AgentMessage(role="system", content=_SYSTEM),
+        AgentMessage(role="user", content="Rank these emails:\n" + _FEWSHOT_INPUT_1),
+        AgentMessage(role="assistant", content=_FEWSHOT_OUTPUT_1),
+        AgentMessage(role="user", content="Rank these emails:\n" + _FEWSHOT_INPUT_2),
+        AgentMessage(role="assistant", content=_FEWSHOT_OUTPUT_2),
+        AgentMessage(role="user", content="Rank these emails:\n" + batch_json),
+    ]
+
+
+def _build_batch(state: State, emails) -> str:
+    rows = []
+    for m in emails:
+        rows.append(
+            {
+                "id": m.id,
+                "subject": m.subject,
+                "sender": m.sender,
+                "category": state.classifications.get(m.id, Category.UNCLASSIFIED).value,
+                "confidence": round(state.confidence_scores.get(m.id, 0.0), 2),
+                "risk_score": round(state.risk_scores.get(m.id, 0.0), 2),
+                "received_at": m.received_at.isoformat() if m.received_at else None,
+            }
+        )
+    return json.dumps(rows, indent=2)
+
+
+def _fallback(state: State, emails) -> None:
+    """Sort by received_at desc, mark everyone NORMAL, push all to needs_review."""
+    epoch = datetime.min.replace(tzinfo=timezone.utc)
+    ordered = sorted(emails, key=lambda m: m.received_at or epoch, reverse=True)
+    state.priority_queue = []
+    for m in ordered:
+        state.priorities[m.id] = Priority.NORMAL
+        state.priority_queue.append((m.id, 0.5))
+        if m.id not in state.needs_review:
+            state.needs_review.append(m.id)
+
+
+def rank(state: State) -> None:
+    if not state.messages:
+        state.priority_queue = []
+        return
+
+    batch = state.messages[:MAX_BATCH]
+    overflow = state.messages[MAX_BATCH:]
+    for m in overflow:
+        state.priorities[m.id] = Priority.NORMAL
+
+    client = anthropic.Anthropic(api_key=os.getenv("ANTHROPIC_API_KEY"))
+    all_msgs = _build_messages(_build_batch(state, batch))
+    system = next(m.content for m in all_msgs if m.role == "system")
+    messages = [{"role": m.role, "content": m.content} for m in all_msgs if m.role != "system"]
+
+    raw = ""
+    for attempt in range(2):
+        try:
+            response = client.messages.create(
+                model=_MODEL,
+                max_tokens=4096,
+                system=system,
+                messages=messages,
+            )
+            raw = response.content[0].text.strip()
+            data = json.loads(raw)
+            ranked = data["ranked"]
+
+            queue: list[tuple[str, float]] = []
+            for entry in ranked:
+                eid = str(entry["email_id"])
+                score = max(0.0, min(1.0, float(entry.get("score", 0.5))))
+                priority = Priority(entry.get("priority", "normal"))
+                state.priorities[eid] = priority
+                queue.append((eid, score))
+
+            queue.sort(key=lambda x: -x[1])
+            # overflow goes to the tail in arrival order
+            for m in overflow:
+                queue.append((m.id, 0.0))
+            state.priority_queue = queue
+            return
+        except (json.JSONDecodeError, KeyError, ValueError):
+            if attempt == 0:
+                messages = messages + [
+                    {"role": "assistant", "content": raw},
+                    {
+                        "role": "user",
+                        "content": (
+                            "Invalid JSON. Respond only with valid JSON in this shape:\n"
+                            '{"ranked":[{"email_id":"...","score":0.0-1.0,'
+                            '"priority":"<urgent|important|normal|low|minimal>","reason":"..."}]}'
+                        ),
+                    },
+                ]
+        except anthropic.APIError:
+            break
+
+    _fallback(state, batch + overflow)
