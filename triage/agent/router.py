@@ -1,25 +1,50 @@
-import json
 import os
 
 import anthropic
 
 from triage.schemas import AgentMessage, Category, Message, State
 
+from ._anthropic import call_tools
 from ._caching import to_cached_request
 
 _MODEL = "claude-sonnet-4-6"
 
 _SYSTEM = (
-    "You are the Router in MailPilot. Classify the email into exactly one category:\n"
+    "You are the Router in MailPilot. Classify the incoming email into exactly one category:\n"
     "- marketing: Promotional emails, newsletters, advertisements, discount offers\n"
     "- personal: Emails from friends, family, or personal acquaintances\n"
     "- work: Professional emails, meetings, projects, business correspondence\n"
     "- risk: Phishing, scams, suspicious links, security threats, high-risk content\n"
     "- billing: Invoices, receipts, payment confirmations, subscription charges\n"
     "- unclassified: Does not clearly fit any of the above categories\n\n"
-    "Respond with valid JSON only, no other text:\n"
-    '{"category": "<category>", "confidence": <0.0-1.0>, "explanation": "<brief reason>"}'
+    "Use the classify_email tool to record your classification with a confidence score."
 )
+
+_TOOL = {
+    "name": "classify_email",
+    "description": "Record the router's classification of an email.",
+    "input_schema": {
+        "type": "object",
+        "properties": {
+            "category": {
+                "type": "string",
+                "enum": [c.value for c in Category],
+                "description": "The router's chosen category",
+            },
+            "confidence": {
+                "type": "number",
+                "minimum": 0.0,
+                "maximum": 1.0,
+                "description": "Router's confidence in the classification, 0.0 to 1.0",
+            },
+            "explanation": {
+                "type": "string",
+                "description": "One-line reason for the classification",
+            },
+        },
+        "required": ["category", "confidence", "explanation"],
+    },
+}
 
 
 def build_messages(email: Message, feedback: str | None = None) -> list[AgentMessage]:
@@ -35,7 +60,11 @@ def build_messages(email: Message, feedback: str | None = None) -> list[AgentMes
         ),
         AgentMessage(
             role="assistant",
-            content='{"category": "marketing", "confidence": 0.97, "explanation": "Promotional discount email from a retail sender"}',
+            content=(
+                'I will classify this email. classify_email('
+                'category="marketing", confidence=0.97, '
+                'explanation="Promotional discount email from a retail sender")'
+            ),
         ),
         AgentMessage(
             role="user",
@@ -47,7 +76,10 @@ def build_messages(email: Message, feedback: str | None = None) -> list[AgentMes
         ),
         AgentMessage(
             role="assistant",
-            content='{"category": "work", "confidence": 0.95, "explanation": "Internal meeting invitation from a business colleague"}',
+            content=(
+                'classify_email(category="work", confidence=0.95, '
+                'explanation="Internal meeting invitation from a business colleague")'
+            ),
         ),
         AgentMessage(
             role="user",
@@ -59,7 +91,10 @@ def build_messages(email: Message, feedback: str | None = None) -> list[AgentMes
         ),
         AgentMessage(
             role="assistant",
-            content='{"category": "risk", "confidence": 0.94, "explanation": "Phishing attempt with urgency tactics and suspicious sender domain"}',
+            content=(
+                'classify_email(category="risk", confidence=0.94, '
+                'explanation="Phishing attempt with urgency tactics and suspicious sender domain")'
+            ),
         ),
         AgentMessage(
             role="user",
@@ -71,7 +106,10 @@ def build_messages(email: Message, feedback: str | None = None) -> list[AgentMes
         ),
         AgentMessage(
             role="assistant",
-            content='{"category": "personal", "confidence": 0.93, "explanation": "Legitimate account welcome email from verified Google domain, not a phishing attempt"}',
+            content=(
+                'classify_email(category="personal", confidence=0.93, '
+                'explanation="Legitimate account welcome email from verified Google domain, not phishing")'
+            ),
         ),
         *(
             [
@@ -104,35 +142,27 @@ def route(email: Message, state: State, *, feedback: str | None = None) -> None:
     all_msgs = build_messages(email, feedback=feedback)
     system, messages = to_cached_request(all_msgs)
 
-    raw = ""
-    for attempt in range(2):
-        try:
-            response = client.messages.create(
-                model=_MODEL,
-                max_tokens=512,
-                system=system,
-                messages=messages,
-            )
-            raw = response.content[0].text.strip()
-            data = json.loads(raw)
-            state.classifications[email.id] = Category(data["category"])
-            state.confidence_scores[email.id] = max(0.0, min(1.0, float(data.get("confidence", 0.5))))
-            return
-        except (json.JSONDecodeError, KeyError, ValueError):
-            if attempt == 0:
-                messages = messages + [
-                    {"role": "assistant", "content": raw},
-                    {
-                        "role": "user",
-                        "content": (
-                            "Invalid JSON or unknown category. Respond only with valid JSON:\n"
-                            '{"category": "<marketing|personal|work|risk|billing|unclassified>", '
-                            '"confidence": <0.0-1.0>, "explanation": "<brief reason>"}'
-                        ),
-                    },
-                ]
-        except anthropic.APIError:
-            break
+    result = call_tools(
+        client,
+        model=_MODEL,
+        system=system,
+        messages=messages,
+        tools=[_TOOL],
+        force_tool="classify_email",
+        max_tokens=512,
+    )
 
-    state.classifications[email.id] = Category.UNCLASSIFIED
-    state.confidence_scores[email.id] = 0.0
+    if not result:
+        state.classifications[email.id] = Category.UNCLASSIFIED
+        state.confidence_scores[email.id] = 0.0
+        return
+
+    data = result[0]["input"]
+    try:
+        state.classifications[email.id] = Category(data["category"])
+        state.confidence_scores[email.id] = max(
+            0.0, min(1.0, float(data.get("confidence", 0.5)))
+        )
+    except (KeyError, ValueError):
+        state.classifications[email.id] = Category.UNCLASSIFIED
+        state.confidence_scores[email.id] = 0.0
