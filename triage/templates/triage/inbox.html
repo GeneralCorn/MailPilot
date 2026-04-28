@@ -55,6 +55,11 @@
     .task-subject{font-size:13px;font-weight:500;color:var(--text);line-height:1.4;margin-bottom:3px}
     .task-meta{font-size:11px;color:var(--muted);margin-bottom:6px}
     .task-reason{font-size:11px;color:var(--muted);font-style:italic;line-height:1.4;border-top:1px solid var(--border);padding-top:6px;margin-top:4px}
+    .api-tests{margin-top:12px;font-size:12px}
+    .api-tests summary{color:var(--muted);cursor:pointer;padding:4px 0}
+    .api-tests-row{display:flex;gap:8px;align-items:center;margin-top:8px;flex-wrap:wrap}
+    .api-tests-hint{font-size:11px;color:var(--muted)}
+    .api-tests-input{flex:1;min-width:180px;padding:6px 10px;border:1px solid var(--border);border-radius:6px;font-size:12px}
 
     .badge{display:inline-block;padding:2px 10px;border-radius:12px;font-size:11px;font-weight:500;background:#f3f4f6;color:var(--muted)}
     .cat-work{background:#dbeafe;color:#1e40af}.cat-personal{background:#ede9fe;color:#5b21b6}.cat-billing{background:#d1fae5;color:#065f46}
@@ -132,6 +137,17 @@
     {% endif %}
     <div class="preview-actions">
       <button class="btn btn-primary" onclick="triageEmail({{ selected.idx }}, this)">Triage This Email</button>
+      <details class="api-tests">
+        <summary>Test real APIs directly (skips LLM)</summary>
+        <div class="api-tests-row">
+          <button class="btn btn-outline" onclick="testCalendar({{ selected.idx }}, this)">Create Calendar Event</button>
+          <span class="api-tests-hint">30 min, starting 1 h from now, title = email subject</span>
+        </div>
+        <div class="api-tests-row">
+          <input id="test-to" type="email" placeholder="recipient@example.com" class="api-tests-input">
+          <button class="btn btn-outline" onclick="testSend({{ selected.idx }}, this)">Send Test Email</button>
+        </div>
+      </details>
     </div>
     {% else %}
     <div class="empty-state">Select an email to preview</div>
@@ -178,6 +194,37 @@
   function importEmails(btn){post('/import/', btn)}
   function runPipeline(btn){post('/run-pipeline/', btn)}
   function triageEmail(idx, btn){post('/email/'+idx+'/triage/', btn)}
+
+  function setBtn(btn, label){btn._original=btn.textContent; btn.disabled=true; btn.textContent=label}
+  function restoreBtn(btn){btn.disabled=false; btn.textContent=btn._original||'Done'}
+
+  function testCalendar(idx, btn){
+    if (!confirm('This creates a real Google Calendar event. Continue?')) return;
+    setBtn(btn, 'Creating…');
+    fetch('/email/'+idx+'/test-calendar/', {method:'POST'})
+      .then(r=>r.json())
+      .then(d=>{
+        if (d.error) throw new Error(d.error);
+        alert('Event created.\n\nTitle: '+d.title+'\nID: '+d.event_id+'\n\nOpen: '+(d.html_link||'(no link)'));
+      })
+      .catch(e=>alert(e.message||e))
+      .finally(()=>restoreBtn(btn));
+  }
+
+  function testSend(idx, btn){
+    const to = (document.getElementById('test-to').value||'').trim();
+    if (!to){alert('Enter a recipient email address.'); return;}
+    if (!confirm('This sends a real email to '+to+'. Continue?')) return;
+    setBtn(btn, 'Sending…');
+    fetch('/email/'+idx+'/test-send/?to='+encodeURIComponent(to), {method:'POST'})
+      .then(r=>r.json())
+      .then(d=>{
+        if (d.error) throw new Error(d.error);
+        alert('Sent to '+d.to+'\nGmail message ID: '+d.message_id);
+      })
+      .catch(e=>alert(e.message||e))
+      .finally(()=>restoreBtn(btn));
+  }
 </script>
 </body>
 </html>

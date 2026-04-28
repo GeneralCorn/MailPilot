@@ -151,6 +151,63 @@ def triage_email(request, idx):
 
 
 @require_POST
+def test_calendar(request, idx):
+    """UI smoke test: create a real Google Calendar event 1h from now using the email subject as title."""
+    from datetime import timedelta, timezone
+    from .tools.actions import create_calendar_event
+
+    emails = _load()
+    if idx >= len(emails):
+        return JsonResponse({"error": "not found"}, status=404)
+    email = emails[idx]
+    start = (datetime.now(timezone.utc) + timedelta(hours=1)).replace(microsecond=0).isoformat()
+    end = (datetime.now(timezone.utc) + timedelta(hours=1, minutes=30)).replace(microsecond=0).isoformat()
+    title = email.get("subject") or "MailPilot test"
+    try:
+        r = create_calendar_event(
+            email_id=email["id"], title=title, start_time=start, end_time=end
+        )
+    except Exception as exc:
+        return JsonResponse({"error": f"{type(exc).__name__}: {exc}"}, status=500)
+    return JsonResponse({
+        "ok": r.success,
+        "event_id": r.data.get("calendar_event_id"),
+        "html_link": r.data.get("html_link"),
+        "title": title,
+    })
+
+
+@require_POST
+def test_send(request, idx):
+    """UI smoke test: send a real Gmail message to a user-supplied address."""
+    from . import gmail
+
+    emails = _load()
+    if idx >= len(emails):
+        return JsonResponse({"error": "not found"}, status=404)
+    to = (request.GET.get("to") or request.POST.get("to") or "").strip()
+    if not to:
+        return JsonResponse({"error": "missing 'to' query parameter"}, status=400)
+    email = emails[idx]
+    subject = "MailPilot test re: " + (email.get("subject") or "")
+    body = (
+        "This is a test message sent from the MailPilot UI to verify Gmail send works.\n"
+        f"Original email subject: {email.get('subject', '')}\n"
+        f"Original sender: {email.get('sender', '')}\n"
+    )
+    try:
+        result = gmail.send_email(to=to, subject=subject, body=body)
+    except Exception as exc:
+        return JsonResponse({"error": f"{type(exc).__name__}: {exc}"}, status=500)
+    return JsonResponse({
+        "ok": True,
+        "message_id": result.get("id"),
+        "thread_id": result.get("threadId"),
+        "to": to,
+    })
+
+
+@require_POST
 def import_emails(request):
     from .gmail import fetch_emails
     try:
