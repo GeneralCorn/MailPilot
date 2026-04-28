@@ -27,6 +27,9 @@ _MODEL = "claude-sonnet-4-6"
 MAX_RETRIES = 3
 MAX_ITERATIONS = 5
 
+# tools whose successful execution implies the email still needs human attention
+_HUMAN_ATTENTION_TOOLS = {Action.ESCALATE, Action.FLAG}
+
 _SYSTEM = (
     "You are the Worker in MailPilot. Given one classified email, plan a list of tool calls "
     "to handle it. Each call is one sub-action.\n\n"
@@ -275,13 +278,19 @@ def work(email: Message, state: State, runtime: "Runtime | None" = None) -> Stat
     state.sub_action_results[email.id] = results
 
     if total == 0:
-        state.email_status[email.id] = Status.DONE
-        return Status.DONE
-    if succeeded == total:
-        state.email_status[email.id] = Status.DONE
-        return Status.DONE
-    if succeeded > 0:
-        state.email_status[email.id] = Status.PARTIAL_DONE
-        return Status.PARTIAL_DONE
-    state.email_status[email.id] = Status.PENDING
-    return Status.PENDING
+        final = Status.DONE
+    elif succeeded == total:
+        final = Status.DONE
+    elif succeeded > 0:
+        final = Status.PARTIAL_DONE
+    else:
+        final = Status.PENDING
+
+    # escalate/flag tools imply human attention even if all sub-actions succeeded
+    if final == Status.DONE and any(
+        r.success and r.tool in _HUMAN_ATTENTION_TOOLS for r in results
+    ):
+        final = Status.FLAGGED
+
+    state.email_status[email.id] = final
+    return final

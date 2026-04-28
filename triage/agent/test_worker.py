@@ -209,6 +209,42 @@ def test_empty_plan_returns_done():
     assert status == Status.DONE
 
 
+def test_successful_escalate_returns_flagged_not_done():
+    state = State(messages=[_msg()])
+    plan = [
+        ToolCall(tool=Action.SUMMARIZE, parameters={"email_id": "e1", "summary": "..."}),
+        ToolCall(tool=Action.ESCALATE, parameters={"email_id": "e1", "target": "human", "reason": "..."}),
+    ]
+    rt = FakeRuntime([_ok(Action.SUMMARIZE), _ok(Action.ESCALATE)])
+    with patch.object(worker_mod, "plan_actions", return_value=plan):
+        status = worker_mod.work(_msg(), state, runtime=rt)
+    assert status == Status.FLAGGED
+    assert state.email_status["e1"] == Status.FLAGGED
+
+
+def test_successful_flag_returns_flagged_not_done():
+    state = State(messages=[_msg()])
+    plan = [
+        ToolCall(tool=Action.FLAG, parameters={"email_id": "e1", "flag": True}),
+    ]
+    rt = FakeRuntime([_ok(Action.FLAG)])
+    with patch.object(worker_mod, "plan_actions", return_value=plan):
+        status = worker_mod.work(_msg(), state, runtime=rt)
+    assert status == Status.FLAGGED
+
+
+def test_archive_only_still_returns_done():
+    state = State(messages=[_msg()])
+    plan = [
+        ToolCall(tool=Action.SUMMARIZE, parameters={"email_id": "e1", "summary": "..."}),
+        ToolCall(tool=Action.ARCHIVE, parameters={"email_id": "e1", "folder": "promotions"}),
+    ]
+    rt = FakeRuntime([_ok(Action.SUMMARIZE), _ok(Action.ARCHIVE)])
+    with patch.object(worker_mod, "plan_actions", return_value=plan):
+        status = worker_mod.work(_msg(), state, runtime=rt)
+    assert status == Status.DONE
+
+
 # ── plan_actions LLM behavior ────────────────────────────────────────────────
 
 def _fake_anthropic_factory(texts: list[str]):
