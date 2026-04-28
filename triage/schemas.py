@@ -27,10 +27,9 @@ class Priority(str, Enum):
 
 class Status(str, Enum):
     PENDING = "pending"
-    PROCESSING = "processing"
     DONE = "done"
-    FAILED = "failed"
-    NEEDS_REVIEW = "needs_review"
+    PARTIAL_DONE = "partial_done"
+    FLAGGED = "flagged"
 
 
 class Action(str, Enum):
@@ -40,6 +39,8 @@ class Action(str, Enum):
     REPLY_DRAFT = "reply_draft"
     CALENDAR = "calendar"
     ESCALATE = "escalate"
+    SUMMARIZE = "summarize"
+    SEND_EMAIL = "send_email"
     NO_ACTION = "no_action"
 
 
@@ -97,6 +98,11 @@ class State(BaseModel):
     pending_calls: list[ToolCall] = Field(default_factory=list)
     results: list[ToolResult] = Field(default_factory=list)
     needs_review: list[str] = Field(default_factory=list)
+    priority_queue: list[tuple[str, float]] = Field(default_factory=list)
+    email_status: dict[str, Status] = Field(default_factory=dict)
+    worker_actions: dict[str, list[ToolCall]] = Field(default_factory=dict)
+    sub_action_results: dict[str, list[ToolResult]] = Field(default_factory=dict)
+    iteration_counts: dict[str, int] = Field(default_factory=dict)
 
 
 class Trace(BaseModel):

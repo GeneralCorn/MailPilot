@@ -83,7 +83,7 @@ def escalate_email(email_id: str, target: str, reason: str) -> ToolResult:
     """Route a risky/ambiguous email to a human reviewer."""
     emails = _load()
     email = _get_email(emails, email_id)
-    email["status"] = Status.NEEDS_REVIEW.value
+    email["status"] = Status.FLAGGED.value
     email.setdefault("escalations", []).append({
         "target": target,
         "reason": reason,
