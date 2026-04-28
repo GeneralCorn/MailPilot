@@ -1,5 +1,6 @@
-import os
+import base64
 from datetime import datetime, timezone
+from email.mime.text import MIMEText
 
 from .. import persistence
 from ..schemas import Action, Priority, Status, ToolResult
@@ -11,10 +12,6 @@ def _ok(tool: Action, message: str = "", data: dict | None = None) -> ToolResult
 
 def _utcnow() -> str:
     return datetime.now(timezone.utc).isoformat()
-
-
-def _is_mocked() -> bool:
-    return os.environ.get("MAILPILOT_MOCK_TOOLS") == "1"
 
 
 def _already_sent(email_id: str, kind: str) -> bool:
@@ -40,25 +37,21 @@ def archive_email(email_id: str, folder: str = "archive") -> ToolResult:
 
 
 def draft_reply(email_id: str, body: str, subject_override: str = "") -> ToolResult:
+    from .. import gmail
     from ..storage import get_email_body
+
     body_row = get_email_body(email_id) or {}
     subject = subject_override or body_row.get("subject", "")
     payload = {"body": body, "subject": subject, "created_at": _utcnow()}
 
-    if not _is_mocked():
-        from email.mime.text import MIMEText
-        import base64
-        from .. import gmail
-        svc = gmail.get_gmail_service()
-        msg = MIMEText(body)
-        msg["subject"] = subject
-        if body_row.get("sender"):
-            msg["to"] = body_row["sender"]
-        raw_bytes = base64.urlsafe_b64encode(msg.as_bytes()).decode()
-        draft = svc.users().drafts().create(
-            userId="me", body={"message": {"raw": raw_bytes}}
-        ).execute()
-        payload["gmail_draft_id"] = draft.get("id")
+    svc = gmail.get_gmail_service()
+    msg = MIMEText(body)
+    msg["subject"] = subject
+    if body_row.get("sender"):
+        msg["to"] = body_row["sender"]
+    raw_bytes = base64.urlsafe_b64encode(msg.as_bytes()).decode()
+    draft = svc.users().drafts().create(userId="me", body={"message": {"raw": raw_bytes}}).execute()
+    payload["gmail_draft_id"] = draft.get("id")
 
     persistence.update_email_state(email_id, draft_reply=payload)
     return _ok(Action.REPLY_DRAFT, "Draft saved", payload)
@@ -72,6 +65,8 @@ def create_calendar_event(
     location: str = "",
     response: str = "accept",
 ) -> ToolResult:
+    from .. import gmail
+
     event = {
         "title": title,
         "start_time": start_time,
@@ -79,18 +74,16 @@ def create_calendar_event(
         "location": location,
         "response": response,
     }
-    if not _is_mocked():
-        from .. import gmail
-        svc = gmail.get_calendar_service()
-        body = {
-            "summary": title,
-            "location": location,
-            "start": {"dateTime": start_time},
-            "end": {"dateTime": end_time},
-        }
-        created = svc.events().insert(calendarId="primary", body=body).execute()
-        event["calendar_event_id"] = created.get("id")
-        event["html_link"] = created.get("htmlLink")
+    svc = gmail.get_calendar_service()
+    body = {
+        "summary": title,
+        "location": location,
+        "start": {"dateTime": start_time},
+        "end": {"dateTime": end_time},
+    }
+    created = svc.events().insert(calendarId="primary", body=body).execute()
+    event["calendar_event_id"] = created.get("id")
+    event["html_link"] = created.get("htmlLink")
 
     persistence.update_email_state(email_id, calendar_event=event, status=Status.DONE.value)
     return _ok(Action.CALENDAR, f"Event '{title}' recorded", event)
@@ -135,19 +128,19 @@ def send_rsvp_email(email_id: str, decision: str, body: str) -> ToolResult:
     if _already_sent(email_id, kind):
         return _ok(Action.SEND_EMAIL, "RSVP already sent", {"kind": "rsvp", "decision": decision, "skipped": True})
 
+    from .. import gmail
     from ..storage import get_email_body
+
     body_row = get_email_body(email_id) or {}
     to = body_row.get("sender", "")
     subject = f"Re: {body_row.get('subject', '')} — {decision.upper()}"
 
-    if _is_mocked():
-        sent = {"kind": kind, "to": to, "subject": subject, "success": True, "at": _utcnow(), "mock": True}
-    else:
-        from .. import gmail
-        result = gmail.send_email(to, subject, body, thread_id=body_row.get("thread_id"))
-        sent = {"kind": kind, "to": to, "subject": subject, "success": True,
-                "at": _utcnow(), "gmail_message_id": result.get("id")}
-
+    result = gmail.send_email(to, subject, body, thread_id=body_row.get("thread_id"))
+    sent = {
+        "kind": kind, "to": to, "subject": subject,
+        "success": True, "at": _utcnow(),
+        "gmail_message_id": result.get("id"),
+    }
     persistence.append_email_list_field(email_id, "external_actions", sent)
     return _ok(Action.SEND_EMAIL, f"RSVP {decision} sent to {to}",
                {"kind": "rsvp", "decision": decision, "to": to})
@@ -157,20 +150,19 @@ def send_confirmation_email(email_id: str, body: str, subject_override: str = ""
     if _already_sent(email_id, "confirmation"):
         return _ok(Action.SEND_EMAIL, "Confirmation already sent", {"kind": "confirmation", "skipped": True})
 
+    from .. import gmail
     from ..storage import get_email_body
+
     body_row = get_email_body(email_id) or {}
     to = body_row.get("sender", "")
     subject = subject_override or f"Re: {body_row.get('subject', '')}"
 
-    if _is_mocked():
-        sent = {"kind": "confirmation", "to": to, "subject": subject, "success": True,
-                "at": _utcnow(), "mock": True}
-    else:
-        from .. import gmail
-        result = gmail.send_email(to, subject, body, thread_id=body_row.get("thread_id"))
-        sent = {"kind": "confirmation", "to": to, "subject": subject, "success": True,
-                "at": _utcnow(), "gmail_message_id": result.get("id")}
-
+    result = gmail.send_email(to, subject, body, thread_id=body_row.get("thread_id"))
+    sent = {
+        "kind": "confirmation", "to": to, "subject": subject,
+        "success": True, "at": _utcnow(),
+        "gmail_message_id": result.get("id"),
+    }
     persistence.append_email_list_field(email_id, "external_actions", sent)
     return _ok(Action.SEND_EMAIL, f"Confirmation sent to {to}", {"kind": "confirmation", "to": to})
 
