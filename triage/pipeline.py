@@ -83,7 +83,10 @@ def run_pipeline(
     eval_idx = persistence.STAGES.index("evaluator")
     worker_idx = persistence.STAGES.index("worker")
 
-    pending = [m for m in emails if not persistence.is_processed(m.id)]
+    pending = [
+        m for m in emails
+        if not persistence.is_processed(m.id) and not persistence.has_pending_proposals(m.id)
+    ]
     state = State(messages=pending)
 
     if resume:
@@ -134,6 +137,12 @@ def run_pipeline(
             )
             if rank_idx is not None:
                 fields["priority_rank"] = rank_idx
+            proposed = s.proposed_actions.get(_eid)
+            if proposed is not None:
+                fields["proposed_actions"] = [
+                    c.model_dump(mode="json") if hasattr(c, "model_dump") else dict(c)
+                    for c in proposed
+                ]
             persistence.update_email_state(_eid, **fields)
             persistence.mark_processed(_eid, run_id, status)
 

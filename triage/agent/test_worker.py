@@ -92,11 +92,11 @@ def test_work_happy_path_returns_done():
 
 def test_retryable_failure_then_success_returns_done():
     state = State(messages=[_msg()])
-    plan = [ToolCall(tool=Action.CALENDAR, parameters={"email_id": "e1"})]
+    plan = [ToolCall(tool=Action.ARCHIVE, parameters={"email_id": "e1", "folder": "x"})]
     rt = FakeRuntime([
-        _fail(Action.CALENDAR, "<HttpError 503 ...>", "HttpError"),
-        _fail(Action.CALENDAR, "<HttpError 503 ...>", "HttpError"),
-        _ok(Action.CALENDAR),
+        _fail(Action.ARCHIVE, "<HttpError 503 ...>", "HttpError"),
+        _fail(Action.ARCHIVE, "<HttpError 503 ...>", "HttpError"),
+        _ok(Action.ARCHIVE),
     ])
     with patch.object(worker_mod, "plan_actions", return_value=plan):
         status = worker_mod.work(_msg(), state, runtime=rt)
@@ -107,8 +107,8 @@ def test_retryable_failure_then_success_returns_done():
 
 def test_retryable_exhausted_with_no_prior_success_returns_pending():
     state = State(messages=[_msg()])
-    plan = [ToolCall(tool=Action.CALENDAR, parameters={"email_id": "e1"})]
-    failures = [_fail(Action.CALENDAR, "timeout", "TimeoutError")] * (worker_mod.MAX_RETRIES + 2)
+    plan = [ToolCall(tool=Action.ARCHIVE, parameters={"email_id": "e1"})]
+    failures = [_fail(Action.ARCHIVE, "timeout", "TimeoutError")] * (worker_mod.MAX_RETRIES + 2)
     rt = FakeRuntime(failures)
     with patch.object(worker_mod, "plan_actions", return_value=plan):
         status = worker_mod.work(_msg(), state, runtime=rt)
@@ -119,14 +119,14 @@ def test_retryable_exhausted_after_prior_success_returns_partial_done():
     state = State(messages=[_msg()])
     plan = [
         ToolCall(tool=Action.SUMMARIZE, parameters={"email_id": "e1"}),
-        ToolCall(tool=Action.CALENDAR, parameters={"email_id": "e1"}),
+        ToolCall(tool=Action.ARCHIVE, parameters={"email_id": "e1"}),
     ]
     rt = FakeRuntime([
         _ok(Action.SUMMARIZE),
-        _fail(Action.CALENDAR, "timeout", "TimeoutError"),
-        _fail(Action.CALENDAR, "timeout", "TimeoutError"),
-        _fail(Action.CALENDAR, "timeout", "TimeoutError"),
-        _fail(Action.CALENDAR, "timeout", "TimeoutError"),
+        _fail(Action.ARCHIVE, "timeout", "TimeoutError"),
+        _fail(Action.ARCHIVE, "timeout", "TimeoutError"),
+        _fail(Action.ARCHIVE, "timeout", "TimeoutError"),
+        _fail(Action.ARCHIVE, "timeout", "TimeoutError"),
     ])
     with patch.object(worker_mod, "plan_actions", return_value=plan):
         status = worker_mod.work(_msg(), state, runtime=rt)
@@ -137,24 +137,24 @@ def test_retryable_exhausted_after_prior_success_returns_partial_done():
 
 def test_recoverable_failure_triggers_replan_and_can_complete():
     state = State(messages=[_msg()])
-    initial = [ToolCall(tool=Action.CALENDAR, parameters={"email_id": "e1"})]
+    initial = [ToolCall(tool=Action.LABEL, parameters={"email_id": "e1", "category": "work"})]
     replanned = [ToolCall(tool=Action.ARCHIVE, parameters={"email_id": "e1", "folder": "done"})]
     rt = FakeRuntime([
-        _fail(Action.CALENDAR, "quota exceeded", "HttpError"),
+        _fail(Action.LABEL, "quota exceeded", "HttpError"),
         _ok(Action.ARCHIVE),
     ])
     with patch.object(worker_mod, "plan_actions", side_effect=[initial, replanned]):
         status = worker_mod.work(_msg(), state, runtime=rt)
     assert status == Status.DONE
-    assert [c.tool for c in rt.calls] == [Action.CALENDAR, Action.ARCHIVE]
+    assert [c.tool for c in rt.calls] == [Action.LABEL, Action.ARCHIVE]
 
 
 def test_recoverable_loop_caps_at_max_iterations():
     state = State(messages=[_msg()])
-    plan_each = [ToolCall(tool=Action.CALENDAR, parameters={"email_id": "e1"})]
+    plan_each = [ToolCall(tool=Action.LABEL, parameters={"email_id": "e1", "category": "x"})]
     # always fail recoverable -> replanner returns same plan -> caps at MAX_ITERATIONS
     rt = FakeRuntime(
-        [_fail(Action.CALENDAR, "quota exceeded", "HttpError")] * (worker_mod.MAX_ITERATIONS + 2)
+        [_fail(Action.LABEL, "quota exceeded", "HttpError")] * (worker_mod.MAX_ITERATIONS + 2)
     )
     with patch.object(worker_mod, "plan_actions", return_value=plan_each):
         status = worker_mod.work(_msg(), state, runtime=rt)
@@ -169,11 +169,11 @@ def test_recoverable_loop_caps_at_max_iterations():
 def test_confirmation_error_flags_and_stops_immediately():
     state = State(messages=[_msg()])
     plan = [
-        ToolCall(tool=Action.CALENDAR, parameters={"email_id": "e1"}),
+        ToolCall(tool=Action.LABEL, parameters={"email_id": "e1", "category": "x"}),
         ToolCall(tool=Action.ARCHIVE, parameters={"email_id": "e1"}),
     ]
     rt = FakeRuntime([
-        _fail(Action.CALENDAR, "<HttpError 403 ...>", "HttpError"),
+        _fail(Action.LABEL, "<HttpError 403 ...>", "HttpError"),
         _ok(Action.ARCHIVE),
     ])
     with patch.object(worker_mod, "plan_actions", return_value=plan):
@@ -186,11 +186,11 @@ def test_confirmation_error_flags_and_stops_immediately():
 def test_fatal_error_marks_pending_and_stops():
     state = State(messages=[_msg()])
     plan = [
-        ToolCall(tool=Action.CALENDAR, parameters={"email_id": "e1"}),
+        ToolCall(tool=Action.LABEL, parameters={"email_id": "e1", "category": "x"}),
         ToolCall(tool=Action.ARCHIVE, parameters={"email_id": "e1"}),
     ]
     rt = FakeRuntime([
-        _fail(Action.CALENDAR, "totally unknown error", "KeyError"),
+        _fail(Action.LABEL, "totally unknown error", "KeyError"),
         _ok(Action.ARCHIVE),
     ])
     with patch.object(worker_mod, "plan_actions", return_value=plan):
@@ -243,6 +243,86 @@ def test_archive_only_still_returns_done():
     with patch.object(worker_mod, "plan_actions", return_value=plan):
         status = worker_mod.work(_msg(), state, runtime=rt)
     assert status == Status.DONE
+
+
+# ── proposed actions (calendar / send_email) ─────────────────────────────────
+
+def test_calendar_proposal_is_deferred_not_executed():
+    state = State(messages=[_msg()])
+    plan = [
+        ToolCall(tool=Action.SUMMARIZE, parameters={"email_id": "e1", "summary": "..."}),
+        ToolCall(tool=Action.CALENDAR, parameters={"email_id": "e1", "title": "Standup"}),
+    ]
+    # only summarize should fire — calendar is deferred
+    rt = FakeRuntime([_ok(Action.SUMMARIZE)])
+    with patch.object(worker_mod, "plan_actions", return_value=plan):
+        status = worker_mod.work(_msg(), state, runtime=rt)
+    assert status == Status.AWAITING_APPROVAL
+    assert state.email_status["e1"] == Status.AWAITING_APPROVAL
+    assert len(rt.calls) == 1
+    assert rt.calls[0].tool == Action.SUMMARIZE
+    assert len(state.proposed_actions["e1"]) == 1
+    assert state.proposed_actions["e1"][0].tool == Action.CALENDAR
+
+
+def test_send_email_proposal_is_deferred():
+    state = State(messages=[_msg()])
+    plan = [
+        ToolCall(tool=Action.SEND_EMAIL, parameters={"email_id": "e1", "kind": "rsvp", "decision": "accept", "body": "ok"}),
+    ]
+    rt = FakeRuntime([])  # nothing should execute
+    with patch.object(worker_mod, "plan_actions", return_value=plan):
+        status = worker_mod.work(_msg(), state, runtime=rt)
+    assert status == Status.AWAITING_APPROVAL
+    assert len(rt.calls) == 0
+    assert len(state.proposed_actions["e1"]) == 1
+    assert state.proposed_actions["e1"][0].tool == Action.SEND_EMAIL
+
+
+def test_mixed_plan_runs_auto_and_defers_proposals():
+    state = State(messages=[_msg()])
+    plan = [
+        ToolCall(tool=Action.SUMMARIZE, parameters={"email_id": "e1", "summary": "..."}),
+        ToolCall(tool=Action.CALENDAR, parameters={"email_id": "e1", "title": "Sync"}),
+        ToolCall(tool=Action.ARCHIVE, parameters={"email_id": "e1", "folder": "done"}),
+        ToolCall(tool=Action.SEND_EMAIL, parameters={"email_id": "e1", "kind": "rsvp", "body": "yes"}),
+    ]
+    rt = FakeRuntime([_ok(Action.SUMMARIZE), _ok(Action.ARCHIVE)])
+    with patch.object(worker_mod, "plan_actions", return_value=plan):
+        status = worker_mod.work(_msg(), state, runtime=rt)
+    assert status == Status.AWAITING_APPROVAL
+    assert [c.tool for c in rt.calls] == [Action.SUMMARIZE, Action.ARCHIVE]
+    proposed = state.proposed_actions["e1"]
+    assert {p.tool for p in proposed} == {Action.CALENDAR, Action.SEND_EMAIL}
+
+
+def test_proposal_collected_during_replan_also_deferred():
+    state = State(messages=[_msg()])
+    initial = [
+        ToolCall(tool=Action.ARCHIVE, parameters={"email_id": "e1", "folder": "x"}),
+    ]
+    replanned = [
+        ToolCall(tool=Action.CALENDAR, parameters={"email_id": "e1", "title": "x"}),
+    ]
+    rt = FakeRuntime([
+        _fail(Action.ARCHIVE, "quota exceeded", "HttpError"),  # recoverable -> replan
+    ])
+    with patch.object(worker_mod, "plan_actions", side_effect=[initial, replanned]):
+        status = worker_mod.work(_msg(), state, runtime=rt)
+    assert status == Status.AWAITING_APPROVAL
+    # only the archive was attempted (and failed); calendar from replan is queued
+    assert len(rt.calls) == 1
+    assert state.proposed_actions["e1"][0].tool == Action.CALENDAR
+
+
+def test_no_proposal_keeps_done_path():
+    state = State(messages=[_msg()])
+    plan = [ToolCall(tool=Action.ARCHIVE, parameters={"email_id": "e1", "folder": "promotions"})]
+    rt = FakeRuntime([_ok(Action.ARCHIVE)])
+    with patch.object(worker_mod, "plan_actions", return_value=plan):
+        status = worker_mod.work(_msg(), state, runtime=rt)
+    assert status == Status.DONE
+    assert "e1" not in state.proposed_actions
 
 
 # ── plan_actions LLM behavior ────────────────────────────────────────────────

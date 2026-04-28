@@ -30,6 +30,15 @@ MAX_ITERATIONS = 5
 # tools whose successful execution implies the email still needs human attention
 _HUMAN_ATTENTION_TOOLS = {Action.ESCALATE, Action.FLAG}
 
+# tools that require explicit user approval before they fire (irreversible side-effects)
+_NEEDS_APPROVAL = {Action.CALENDAR, Action.SEND_EMAIL}
+
+
+def _split_plan(plan: list[ToolCall]) -> tuple[list[ToolCall], list[ToolCall]]:
+    auto = [c for c in plan if c.tool not in _NEEDS_APPROVAL]
+    proposed = [c for c in plan if c.tool in _NEEDS_APPROVAL]
+    return auto, proposed
+
 _SYSTEM = (
     "You are the Worker in MailPilot. Given one classified email, plan a list of tool calls "
     "to handle it. Each call is one sub-action.\n\n"
@@ -223,8 +232,12 @@ def work(email: Message, state: State, runtime: "Runtime | None" = None) -> Stat
         from triage.runtime import Runtime as _Runtime
         runtime = _Runtime()
 
-    remaining: list[ToolCall] = list(plan_actions(email, state))
-    state.worker_actions[email.id] = list(remaining)
+    initial_plan: list[ToolCall] = list(plan_actions(email, state))
+    state.worker_actions[email.id] = list(initial_plan)
+
+    auto, proposed = _split_plan(initial_plan)
+    remaining: list[ToolCall] = list(auto)
+    proposed_pile: list[ToolCall] = list(proposed)
 
     results: list[ToolResult] = []
     succeeded = 0
@@ -271,7 +284,10 @@ def work(email: Message, state: State, runtime: "Runtime | None" = None) -> Stat
             break
         if outcome == "replan":
             iterations += 1
-            remaining = list(plan_actions(email, state, prior_results=list(results)))
+            replanned = list(plan_actions(email, state, prior_results=list(results)))
+            new_auto, new_proposed = _split_plan(replanned)
+            remaining = new_auto
+            proposed_pile.extend(new_proposed)
             total = succeeded + len(remaining)
             continue
 
@@ -291,6 +307,11 @@ def work(email: Message, state: State, runtime: "Runtime | None" = None) -> Stat
         r.success and r.tool in _HUMAN_ATTENTION_TOOLS for r in results
     ):
         final = Status.FLAGGED
+
+    if proposed_pile:
+        state.proposed_actions[email.id] = list(proposed_pile)
+        # awaiting_approval takes precedence — there are still actions for the user to review
+        final = Status.AWAITING_APPROVAL
 
     state.email_status[email.id] = final
     return final
