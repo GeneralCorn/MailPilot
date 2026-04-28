@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import json
 import os
 import time
 from typing import TYPE_CHECKING
@@ -9,7 +8,6 @@ import anthropic
 
 from triage.schemas import (
     Action,
-    AgentMessage,
     Category,
     Message,
     State,
@@ -18,7 +16,7 @@ from triage.schemas import (
     ToolResult,
 )
 
-from ._caching import to_cached_request
+from ._anthropic import call_tools
 
 if TYPE_CHECKING:
     from triage.runtime import Runtime
@@ -39,99 +37,208 @@ def _split_plan(plan: list[ToolCall]) -> tuple[list[ToolCall], list[ToolCall]]:
     proposed = [c for c in plan if c.tool in _NEEDS_APPROVAL]
     return auto, proposed
 
+
 _SYSTEM = (
-    "You are the Worker in MailPilot. Given one classified email, plan a list of tool calls "
-    "to handle it. Each call is one sub-action.\n\n"
-    "Available tools (parameters in JSON):\n"
-    "- summarize:  { summary: string }                            — store a 1-2 sentence summary; required first for work and risk\n"
-    "- label:      { category: string }                           — re-label (rare; router did this)\n"
-    "- flag:       { flag: bool }                                 — mark as needing attention\n"
-    "- archive:    { folder: string }                             — move to a folder; use for done items\n"
-    "- reply_draft:{ body: string, subject_override?: string }    — save a draft for human review\n"
-    "- calendar:   { title, start_time, end_time, location?, response? } — create a calendar event\n"
-    "- send_email: { kind: 'rsvp'|'confirmation', body: string, decision?: 'accept'|'decline'|'tentative', subject_override?: string }\n"
-    "- escalate:   { target: string, reason: string }             — route to a human reviewer\n"
-    "- no_action:  { reason: string }                             — explicitly nothing to do\n\n"
+    "You are the Worker in MailPilot. Given one classified email, decide what tool calls "
+    "to make to handle it. You can call multiple tools in a single response.\n\n"
     "Guidance:\n"
-    "- For work and risk emails, ALWAYS start with a summarize action.\n"
+    "- For work and risk emails, ALWAYS start with a `summarize` call.\n"
     "- Risk emails must be escalated, never auto-replied or auto-archived.\n"
-    "- Marketing emails: archive into 'promotions' is usually enough.\n"
-    "- When a meeting email contains an RSVP signal (phrases like 'please confirm',\n"
-    "  'RSVP', 'let me know if you can attend'), ALWAYS propose BOTH 'calendar' and\n"
-    "  'send_email' (kind='rsvp'). calendar and send_email are gated behind a human\n"
-    "  approval UI — the user decides whether to actually send / book, so do not\n"
-    "  pre-filter on your own. Skipping send_email here is wrong.\n"
-    "- Personal: prefer reply_draft over auto-send unless an explicit RSVP is requested.\n"
-    "- Be conservative ONLY for irreversible actions outside the proposal queue\n"
-    "  (label, archive, escalate). For calendar / send_email always include them when\n"
-    "  the email content suggests them — the user can reject in the UI.\n"
-    "- Do NOT include the email_id parameter; the runtime fills it in.\n\n"
-    "Respond with valid JSON only, no other text:\n"
-    '{"actions":[{"tool":"<tool_name>","parameters":{...},"reason":"<brief>"}]}'
+    "- Marketing emails: `archive` into 'promotions' is usually enough.\n"
+    "- When a meeting email contains an RSVP signal (phrases like 'please confirm', 'RSVP',\n"
+    "  'let me know if you can attend'), ALWAYS call BOTH `calendar` and `send_email` (kind='rsvp').\n"
+    "  These two tools are gated behind a human approval UI — the user decides whether to\n"
+    "  actually send / book, so do not pre-filter on your own. Skipping send_email here is wrong.\n"
+    "- Personal: prefer `reply_draft` over auto-send unless an explicit RSVP is requested.\n"
+    "- Be conservative ONLY for irreversible actions outside the proposal queue (label, archive,\n"
+    "  escalate). For calendar / send_email always include them when the email content suggests\n"
+    "  them — the user can reject in the UI.\n"
+    "- The runtime fills in `email_id`; don't supply it yourself."
 )
 
 
-def _build_messages(
-    email: Message, category: Category, prior_results: list[ToolResult] | None
-) -> list[AgentMessage]:
-    msgs: list[AgentMessage] = [AgentMessage(role="system", content=_SYSTEM)]
+_TOOLS: list[dict] = [
+    {
+        "name": "summarize",
+        "description": "Save a 1-2 sentence summary of the email body for the reviewer.",
+        "input_schema": {
+            "type": "object",
+            "properties": {"summary": {"type": "string"}},
+            "required": ["summary"],
+        },
+    },
+    {
+        "name": "label",
+        "description": "Re-label the email's category. Rare; the router has done this.",
+        "input_schema": {
+            "type": "object",
+            "properties": {"category": {"type": "string", "enum": [c.value for c in Category]}},
+            "required": ["category"],
+        },
+    },
+    {
+        "name": "flag",
+        "description": "Mark the email as needing user attention.",
+        "input_schema": {
+            "type": "object",
+            "properties": {"flag": {"type": "boolean"}},
+            "required": ["flag"],
+        },
+    },
+    {
+        "name": "archive",
+        "description": "Move the email into a folder when no follow-up is needed.",
+        "input_schema": {
+            "type": "object",
+            "properties": {"folder": {"type": "string"}},
+            "required": ["folder"],
+        },
+    },
+    {
+        "name": "reply_draft",
+        "description": "Save a draft reply to Gmail for human review (NOT sent).",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "body": {"type": "string"},
+                "subject_override": {"type": "string"},
+            },
+            "required": ["body"],
+        },
+    },
+    {
+        "name": "calendar",
+        "description": (
+            "Propose a Google Calendar event. The user will review and approve before "
+            "the event is actually created."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "title": {"type": "string"},
+                "start_time": {"type": "string", "description": "ISO 8601"},
+                "end_time": {"type": "string", "description": "ISO 8601"},
+                "location": {"type": "string"},
+                "response": {"type": "string", "enum": ["accept", "decline", "tentative"]},
+            },
+            "required": ["title", "start_time", "end_time"],
+        },
+    },
+    {
+        "name": "send_email",
+        "description": (
+            "Propose sending a Gmail message (RSVP or confirmation). The user will review "
+            "and approve before any email is actually sent."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "kind": {"type": "string", "enum": ["rsvp", "confirmation"]},
+                "body": {"type": "string"},
+                "decision": {"type": "string", "enum": ["accept", "decline", "tentative"]},
+                "subject_override": {"type": "string"},
+            },
+            "required": ["kind", "body"],
+        },
+    },
+    {
+        "name": "escalate",
+        "description": "Route a risky or ambiguous email to a human reviewer.",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "target": {"type": "string"},
+                "reason": {"type": "string"},
+            },
+            "required": ["target", "reason"],
+        },
+    },
+    {
+        "name": "no_action",
+        "description": "Explicitly record that no action is needed.",
+        "input_schema": {
+            "type": "object",
+            "properties": {"reason": {"type": "string"}},
+            "required": ["reason"],
+        },
+    },
+]
 
-    msgs.append(AgentMessage(
-        role="user",
-        content=(
+
+def _fewshot_messages() -> list[dict]:
+    """Three few-shots in proper tool_use + tool_result form, with cache_control on the last block."""
+    return [
+        # marketing → archive
+        {"role": "user", "content": (
             "Subject: Big sale — 50% off this weekend\n"
             "Sender: deals@store.com\n"
             "Category: marketing\n"
             "Body: Limited-time offers on everything in store."
-        ),
-    ))
-    msgs.append(AgentMessage(
-        role="assistant",
-        content='{"actions":[{"tool":"archive","parameters":{"folder":"promotions"},"reason":"promotional, no follow-up"}]}',
-    ))
+        )},
+        {"role": "assistant", "content": [
+            {"type": "tool_use", "id": "fs1_a", "name": "archive",
+             "input": {"folder": "promotions"}},
+        ]},
+        {"role": "user", "content": [
+            {"type": "tool_result", "tool_use_id": "fs1_a", "content": "Moved to 'promotions'"},
+        ]},
 
-    msgs.append(AgentMessage(
-        role="user",
-        content=(
+        # work meeting → summarize + calendar + send_email(rsvp)
+        {"role": "user", "content": (
             "Subject: Standup Friday 10:00 AM\n"
             "Sender: lead@acme.com\n"
             "Category: work\n"
             "Body: Quick standup Friday 10–10:30 in Room 4. Please confirm."
-        ),
-    ))
-    msgs.append(AgentMessage(
-        role="assistant",
-        content=(
-            '{"actions":['
-            '{"tool":"summarize","parameters":{"summary":"Standup Friday 10:00–10:30 AM in Room 4."},"reason":"context"},'
-            '{"tool":"calendar","parameters":{"title":"Standup","start_time":"2026-04-30T10:00:00Z",'
-            '"end_time":"2026-04-30T10:30:00Z","location":"Room 4","response":"accept"},"reason":"book the slot"},'
-            '{"tool":"send_email","parameters":{"kind":"rsvp","decision":"accept","body":"See you Friday."},"reason":"confirm attendance"}'
-            ']}'
-        ),
-    ))
+        )},
+        {"role": "assistant", "content": [
+            {"type": "tool_use", "id": "fs2_a", "name": "summarize",
+             "input": {"summary": "Standup Friday 10:00–10:30 AM in Room 4."}},
+            {"type": "tool_use", "id": "fs2_b", "name": "calendar",
+             "input": {
+                 "title": "Standup",
+                 "start_time": "2026-04-30T10:00:00Z",
+                 "end_time": "2026-04-30T10:30:00Z",
+                 "location": "Room 4",
+                 "response": "accept",
+             }},
+            {"type": "tool_use", "id": "fs2_c", "name": "send_email",
+             "input": {
+                 "kind": "rsvp",
+                 "decision": "accept",
+                 "body": "See you Friday.",
+             }},
+        ]},
+        {"role": "user", "content": [
+            {"type": "tool_result", "tool_use_id": "fs2_a", "content": "Summary saved"},
+            {"type": "tool_result", "tool_use_id": "fs2_b", "content": "Event proposal queued for approval"},
+            {"type": "tool_result", "tool_use_id": "fs2_c", "content": "RSVP proposal queued for approval"},
+        ]},
 
-    msgs.append(AgentMessage(
-        role="user",
-        content=(
+        # risk → summarize + escalate
+        {"role": "user", "content": (
             "Subject: URGENT: Verify your account NOW\n"
             "Sender: support@bank-verify.ru\n"
             "Category: risk\n"
             "Body: Click this link immediately to keep your account active."
-        ),
-    ))
-    msgs.append(AgentMessage(
-        role="assistant",
-        content=(
-            '{"actions":['
-            '{"tool":"summarize","parameters":{"summary":"Likely phishing — fake verification request from suspicious .ru domain."},"reason":"context"},'
-            '{"tool":"escalate","parameters":{"target":"security","reason":"phishing indicators"},"reason":"never auto-act on risk"}'
-            ']}'
-        ),
-    ))
+        )},
+        {"role": "assistant", "content": [
+            {"type": "tool_use", "id": "fs3_a", "name": "summarize",
+             "input": {"summary": "Likely phishing — fake verification request from suspicious .ru domain."}},
+            {"type": "tool_use", "id": "fs3_b", "name": "escalate",
+             "input": {"target": "security", "reason": "phishing indicators"}},
+        ]},
+        {"role": "user", "content": [
+            {"type": "tool_result", "tool_use_id": "fs3_a", "content": "Summary saved"},
+            # cache_control on the LAST few-shot block — caches system + tools + all few-shots
+            {"type": "tool_result", "tool_use_id": "fs3_b", "content": "Escalated to security",
+             "cache_control": {"type": "ephemeral"}},
+        ]},
+    ]
 
+
+def _target_user_message(email: Message, category: Category, prior_results: list[ToolResult] | None) -> dict:
     body = email.body_plain or email.snippet or ""
-    target = (
+    text = (
         f"Subject: {email.subject}\n"
         f"Sender: {email.sender}\n"
         f"Category: {category.value}\n"
@@ -142,23 +249,11 @@ def _build_messages(
             f"- {r.tool.value}: {'OK' if r.success else 'FAILED — ' + r.message[:120]}"
             for r in prior_results
         )
-        target += (
+        text += (
             f"\n\nActions already attempted in this run:\n{prior_lines}\n\n"
             "Replan the remaining steps to recover. Skip any actions already done."
         )
-    msgs.append(AgentMessage(role="user", content=target))
-    return msgs
-
-
-def _parse_actions(raw: str, email_id: str) -> list[ToolCall]:
-    data = json.loads(raw)
-    out: list[ToolCall] = []
-    for entry in data["actions"]:
-        tool = Action(entry["tool"])
-        params = dict(entry.get("parameters") or {})
-        params["email_id"] = email_id
-        out.append(ToolCall(tool=tool, parameters=params, reason=entry.get("reason", "")))
-    return out
+    return {"role": "user", "content": text}
 
 
 def plan_actions(
@@ -166,39 +261,46 @@ def plan_actions(
 ) -> list[ToolCall]:
     category = state.classifications.get(email.id, Category.UNCLASSIFIED)
     client = anthropic.Anthropic(api_key=os.getenv("ANTHROPIC_API_KEY"))
-    all_msgs = _build_messages(email, category, prior_results)
-    system, messages = to_cached_request(all_msgs)
 
-    raw = ""
-    for attempt in range(2):
-        try:
-            response = client.messages.create(
-                model=_MODEL, max_tokens=2048, system=system, messages=messages
+    messages = _fewshot_messages() + [_target_user_message(email, category, prior_results)]
+
+    result = call_tools(
+        client,
+        model=_MODEL,
+        system=_SYSTEM,
+        messages=messages,
+        tools=_TOOLS,
+        max_tokens=2048,
+    )
+
+    if result is None:
+        return [
+            ToolCall(
+                tool=Action.ESCALATE,
+                parameters={"email_id": email.id, "target": "human", "reason": "worker planner failed"},
+                reason="planner LLM failure",
             )
-            raw = response.content[0].text.strip()
-            return _parse_actions(raw, email.id)
-        except (json.JSONDecodeError, KeyError, ValueError):
-            if attempt == 0:
-                messages = messages + [
-                    {"role": "assistant", "content": raw},
-                    {
-                        "role": "user",
-                        "content": (
-                            "Invalid JSON or unknown tool. Respond only with valid JSON:\n"
-                            '{"actions":[{"tool":"<name>","parameters":{...},"reason":"..."}]}'
-                        ),
-                    },
-                ]
-        except anthropic.APIError:
-            break
+        ]
 
-    return [
-        ToolCall(
-            tool=Action.ESCALATE,
-            parameters={"email_id": email.id, "target": "human", "reason": "worker planner failed"},
-            reason="planner LLM failure",
-        )
-    ]
+    calls: list[ToolCall] = []
+    for entry in result:
+        try:
+            tool = Action(entry["name"])
+        except ValueError:
+            continue
+        params = dict(entry.get("input") or {})
+        params["email_id"] = email.id
+        calls.append(ToolCall(tool=tool, parameters=params, reason=""))
+
+    if not calls:
+        return [
+            ToolCall(
+                tool=Action.ESCALATE,
+                parameters={"email_id": email.id, "target": "human", "reason": "worker produced no valid actions"},
+                reason="planner returned no usable tools",
+            )
+        ]
+    return calls
 
 
 def classify_error(result: ToolResult) -> str:

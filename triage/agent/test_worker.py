@@ -327,52 +327,56 @@ def test_no_proposal_keeps_done_path():
 
 # ── plan_actions LLM behavior ────────────────────────────────────────────────
 
-def _fake_anthropic_factory(texts: list[str]):
-    iterator = iter(texts)
-    def factory(*args, **kwargs):
-        client = MagicMock()
-        def create(**_):
-            text = next(iterator)
-            resp = MagicMock()
-            resp.content = [MagicMock(text=text)]
-            return resp
-        client.messages.create.side_effect = lambda **kw: create(**kw)
-        return client
-    return factory
+from triage.agent._test_helpers import fake_anthropic_with_tool_calls
 
 
-def test_plan_actions_parses_llm_output_and_injects_email_id():
+def test_plan_actions_parses_tool_use_and_injects_email_id():
     state = State(messages=[_msg()])
     state.classifications["e1"] = Category.WORK
-    response = (
-        '{"actions":['
-        '{"tool":"summarize","parameters":{"summary":"hello"},"reason":"context"},'
-        '{"tool":"archive","parameters":{"folder":"done"},"reason":"wrap up"}'
-        "]}"
-    )
-    with patch.object(worker_mod.anthropic, "Anthropic", _fake_anthropic_factory([response])):
+    factory = fake_anthropic_with_tool_calls([
+        [
+            ("summarize", {"summary": "hello"}),
+            ("archive", {"folder": "done"}),
+        ]
+    ])
+    with patch.object(worker_mod.anthropic, "Anthropic", factory):
         calls = worker_mod.plan_actions(_msg(), state)
     assert [c.tool for c in calls] == [Action.SUMMARIZE, Action.ARCHIVE]
     assert all(c.parameters["email_id"] == "e1" for c in calls)
     assert calls[0].parameters["summary"] == "hello"
 
 
-def test_plan_actions_repair_retry_succeeds():
+def test_plan_actions_falls_back_to_escalate_on_api_error():
     state = State(messages=[_msg()])
-    bad = "garbage"
-    good = '{"actions":[{"tool":"no_action","parameters":{"reason":"nothing"},"reason":"x"}]}'
-    with patch.object(worker_mod.anthropic, "Anthropic", _fake_anthropic_factory([bad, good])):
-        calls = worker_mod.plan_actions(_msg(), state)
-    assert calls[0].tool == Action.NO_ACTION
-
-
-def test_plan_actions_falls_back_to_escalate_on_persistent_failure():
-    state = State(messages=[_msg()])
-    with patch.object(worker_mod.anthropic, "Anthropic", _fake_anthropic_factory(["bad", "still bad"])):
+    factory = fake_anthropic_with_tool_calls([None])
+    with patch.object(worker_mod.anthropic, "Anthropic", factory):
         calls = worker_mod.plan_actions(_msg(), state)
     assert len(calls) == 1
     assert calls[0].tool == Action.ESCALATE
     assert calls[0].parameters["target"] == "human"
+
+
+def test_plan_actions_falls_back_when_all_tools_invalid():
+    state = State(messages=[_msg()])
+    factory = fake_anthropic_with_tool_calls([
+        [("nonexistent_tool", {"foo": "bar"})]
+    ])
+    with patch.object(worker_mod.anthropic, "Anthropic", factory):
+        calls = worker_mod.plan_actions(_msg(), state)
+    assert calls[0].tool == Action.ESCALATE
+
+
+def test_plan_actions_skips_invalid_tool_but_keeps_valid_ones():
+    state = State(messages=[_msg()])
+    factory = fake_anthropic_with_tool_calls([
+        [
+            ("nonexistent", {"foo": 1}),
+            ("summarize", {"summary": "ok"}),
+        ]
+    ])
+    with patch.object(worker_mod.anthropic, "Anthropic", factory):
+        calls = worker_mod.plan_actions(_msg(), state)
+    assert [c.tool for c in calls] == [Action.SUMMARIZE]
 
 
 def test_plan_actions_falls_back_on_anthropic_api_error():
