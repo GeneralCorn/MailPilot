@@ -1,3 +1,5 @@
+from datetime import datetime
+
 from .storage import _load, _save, load_inbox
 
 from django.shortcuts import render
@@ -14,6 +16,18 @@ _DEFAULT_TIER = len(Priority)
 _ATTENTION_STATUSES = {"flagged", "partial_done", "pending"}
 _PROCESSED_STATUSES = _ATTENTION_STATUSES | {"done"}
 _TASK_QUEUE_LIMIT = 20
+
+
+def _to_timestamp(value) -> float:
+    """ISO string or datetime -> unix seconds; missing/bad value -> 0 (sorts last when negated)."""
+    if not value:
+        return 0.0
+    if isinstance(value, datetime):
+        return value.timestamp()
+    try:
+        return datetime.fromisoformat(str(value)).timestamp()
+    except (ValueError, TypeError):
+        return 0.0
 
 
 def inbox(request):
@@ -37,7 +51,7 @@ def inbox(request):
         e = item[1] if isinstance(item, tuple) else item
         tier = _TIER_ORDER.get(e.get("priority", ""), _DEFAULT_TIER)
         rank = e.get("priority_rank", 9999)
-        return (tier, rank)
+        return (tier, rank, -_to_timestamp(e.get("received_at")))
 
     if not category:
         email_list = [{"idx": i, **e} for i, e in enumerate(emails)]
