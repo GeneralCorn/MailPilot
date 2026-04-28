@@ -52,6 +52,20 @@
     .status-flagged{background:#fee2e2;color:#991b1b}
     .status-partial_done{background:#fef3c7;color:#92400e}
     .status-pending{background:#e0e7ff;color:#3730a3}
+    .status-awaiting_approval{background:#ffedd5;color:#9a3412}
+
+    .proposals-panel{margin:0 0 16px;padding:14px;border:2px solid #fb923c;border-radius:8px;background:#fff7ed}
+    .proposals-panel h4{margin:0 0 12px;font-size:14px;color:#9a3412}
+    .proposal{padding:12px;border:1px solid #fed7aa;border-radius:6px;background:#fff;margin-bottom:10px}
+    .proposal:last-child{margin-bottom:0}
+    .proposal-header{display:flex;gap:10px;align-items:baseline;margin-bottom:10px}
+    .proposal-tool{font-size:12px;font-weight:600;color:#9a3412;text-transform:uppercase;letter-spacing:.5px}
+    .proposal-reason{font-size:12px;color:var(--muted)}
+    .proposal-fields{display:flex;flex-direction:column;gap:8px;margin-bottom:10px}
+    .proposal-fields label{display:flex;flex-direction:column;gap:3px;font-size:11px;color:var(--muted)}
+    .proposal-fields input,.proposal-fields select,.proposal-fields textarea{padding:6px 10px;border:1px solid var(--border);border-radius:5px;font-size:13px;font-family:inherit;color:var(--text)}
+    .proposal-fields textarea{resize:vertical}
+    .proposal-buttons{display:flex;gap:8px}
     .task-subject{font-size:13px;font-weight:500;color:var(--text);line-height:1.4;margin-bottom:3px}
     .task-meta{font-size:11px;color:var(--muted);margin-bottom:6px}
     .task-reason{font-size:11px;color:var(--muted);font-style:italic;line-height:1.4;border-top:1px solid var(--border);padding-top:6px;margin-top:4px}
@@ -130,6 +144,45 @@
         {% if selected.priority == "urgent" %}<span class="badge pri-critical">urgent</span>{% elif selected.priority == "important" %}<span class="badge pri-high">important</span>{% endif %}
       </div>
     </div>
+    {% if selected.proposed_actions %}
+    <div class="proposals-panel">
+      <h4>Proposed actions awaiting approval ({{ selected.proposed_actions|length }})</h4>
+      {% for p in selected.proposed_actions %}
+      <div class="proposal" data-tool="{{ p.tool }}" data-idx="{{ forloop.counter0 }}">
+        <div class="proposal-header">
+          <span class="proposal-tool">{{ p.tool }}</span>
+          {% if p.reason %}<span class="proposal-reason">{{ p.reason }}</span>{% endif %}
+        </div>
+        {% if p.tool == "calendar" %}
+        <div class="proposal-fields">
+          <label>Title <input class="prop-field" data-key="title" value="{{ p.parameters.title|default:'' }}"></label>
+          <label>Start <input class="prop-field" data-key="start_time" value="{{ p.parameters.start_time|default:'' }}"></label>
+          <label>End <input class="prop-field" data-key="end_time" value="{{ p.parameters.end_time|default:'' }}"></label>
+          <label>Location <input class="prop-field" data-key="location" value="{{ p.parameters.location|default:'' }}"></label>
+        </div>
+        {% elif p.tool == "send_email" %}
+        <div class="proposal-fields">
+          <label>To <input class="prop-field" data-key="to" value="{{ selected.sender|default:'' }}"></label>
+          {% if p.parameters.kind == "rsvp" %}
+          <label>Decision
+            <select class="prop-field" data-key="decision">
+              <option value="accept" {% if p.parameters.decision == "accept" %}selected{% endif %}>accept</option>
+              <option value="decline" {% if p.parameters.decision == "decline" %}selected{% endif %}>decline</option>
+              <option value="tentative" {% if p.parameters.decision == "tentative" %}selected{% endif %}>tentative</option>
+            </select>
+          </label>
+          {% endif %}
+          <label>Body <textarea class="prop-field" data-key="body" rows="4">{{ p.parameters.body|default:'' }}</textarea></label>
+        </div>
+        {% endif %}
+        <div class="proposal-buttons">
+          <button class="btn btn-primary" onclick="approveProposal({{ selected.idx }}, {{ forloop.counter0 }}, this)">Approve</button>
+          <button class="btn btn-outline" onclick="rejectProposal({{ selected.idx }}, {{ forloop.counter0 }}, this)">Reject</button>
+        </div>
+      </div>
+      {% endfor %}
+    </div>
+    {% endif %}
     {% if selected.body_html %}
     <div class="frame-wrap"><iframe class="preview-frame" id="email-frame" sandbox="allow-same-origin" srcdoc="{{ selected.body_html }}"></iframe></div>
     {% else %}
@@ -224,6 +277,45 @@
       })
       .catch(e=>alert(e.message||e))
       .finally(()=>restoreBtn(btn));
+  }
+
+  function _collectProposalFields(btn){
+    const proposal = btn.closest('.proposal');
+    const params = new URLSearchParams();
+    proposal.querySelectorAll('.prop-field').forEach(el => {
+      const key = el.dataset.key;
+      const val = el.value || '';
+      if (val !== '') params.set(key, val);
+    });
+    return {tool: proposal.dataset.tool, params: params};
+  }
+
+  function approveProposal(idx, pIdx, btn){
+    const {tool, params} = _collectProposalFields(btn);
+    let warning = 'Approve this action?';
+    if (tool === 'send_email') warning = 'This will send a real email to '+(params.get('to')||'(unknown)')+'. Continue?';
+    if (tool === 'calendar') warning = 'This will create a real Google Calendar event. Continue?';
+    if (!confirm(warning)) return;
+    setBtn(btn, 'Approving…');
+    fetch('/email/'+idx+'/proposals/'+pIdx+'/approve/?'+params.toString(), {method:'POST'})
+      .then(r=>r.json())
+      .then(d=>{
+        if (d.error) throw new Error(d.error);
+        location.reload();
+      })
+      .catch(e=>{alert(e.message||e); restoreBtn(btn);});
+  }
+
+  function rejectProposal(idx, pIdx, btn){
+    if (!confirm('Reject and discard this proposed action?')) return;
+    setBtn(btn, 'Rejecting…');
+    fetch('/email/'+idx+'/proposals/'+pIdx+'/reject/', {method:'POST'})
+      .then(r=>r.json())
+      .then(d=>{
+        if (d.error) throw new Error(d.error);
+        location.reload();
+      })
+      .catch(e=>{alert(e.message||e); restoreBtn(btn);});
   }
 </script>
 </body>
