@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import uuid
 from datetime import datetime, timezone
-from typing import Tuple
 
 from . import persistence
 from .agent.loop import route_eval_loop
@@ -10,32 +9,7 @@ from .agent.ranker import rank
 from .agent.wrapper import resume_stage_index, run_stage
 from .agent.worker import work
 from .runtime import Runtime
-from .schemas import Message, State, Status, Trace, ToolCall, ToolResult
-from .tools.registry import execute_tool_call
-
-
-def run_tool_calls(state: State, trace: Trace | None = None) -> Tuple[State, Trace]:
-    """Execute pending ToolCalls in State and record results in Trace. Low-level helper."""
-    if trace is None:
-        trace = Trace(
-            run_id=f"run-{datetime.now(timezone.utc).isoformat()}",
-            started_at=datetime.now(timezone.utc),
-            input_count=len(state.messages),
-        )
-
-    if not state.pending_calls:
-        trace.finished_at = datetime.now(timezone.utc)
-        return state, trace
-
-    for call in list(state.pending_calls):
-        trace.tool_calls.append(call)
-        result: ToolResult = execute_tool_call(call)
-        state.results.append(result)
-        trace.tool_results.append(result)
-
-    state.pending_calls.clear()
-    trace.finished_at = datetime.now(timezone.utc)
-    return state, trace
+from .schemas import Message, State, Status
 
 
 def _new_run_id() -> str:

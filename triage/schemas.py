@@ -96,8 +96,6 @@ class State(BaseModel):
     priorities: dict[str, Priority] = Field(default_factory=dict)
     risk_scores: dict[str, float] = Field(default_factory=dict)
     confidence_scores: dict[str, float] = Field(default_factory=dict)
-    pending_calls: list[ToolCall] = Field(default_factory=list)
-    results: list[ToolResult] = Field(default_factory=list)
     needs_review: list[str] = Field(default_factory=list)
     priority_queue: list[tuple[str, float]] = Field(default_factory=list)
     email_status: dict[str, Status] = Field(default_factory=dict)
@@ -110,16 +108,3 @@ class State(BaseModel):
     proposed_actions: dict[str, list[ToolCall]] = Field(default_factory=dict)
 
 
-class Trace(BaseModel):
-    """Full audit log of a single pipeline run."""
-    run_id: str
-    started_at: datetime
-    finished_at: datetime | None = None
-    input_count: int = 0
-    stages: list[str] = Field(default_factory=list)
-    decisions: list[dict[str, Any]] = Field(default_factory=list)
-    tool_calls: list[ToolCall] = Field(default_factory=list)
-    tool_results: list[ToolResult] = Field(default_factory=list)
-    errors: list[str] = Field(default_factory=list)
-    total_tokens: int = 0
-    total_cost_usd: float = 0.0
