@@ -20,7 +20,7 @@ _SYSTEM = (
 )
 
 
-def build_messages(email: Message) -> list[AgentMessage]:
+def build_messages(email: Message, feedback: str | None = None) -> list[AgentMessage]:
     return [
         AgentMessage(role="system", content=_SYSTEM),
         AgentMessage(
@@ -71,6 +71,19 @@ def build_messages(email: Message) -> list[AgentMessage]:
             role="assistant",
             content='{"category": "personal", "confidence": 0.93, "explanation": "Legitimate account welcome email from verified Google domain, not a phishing attempt"}',
         ),
+        *(
+            [
+                AgentMessage(
+                    role="user",
+                    content=(
+                        f"Your previous classification was rejected by the Evaluator. "
+                        f"Reason: {feedback}. Reclassify carefully."
+                    ),
+                )
+            ]
+            if feedback
+            else []
+        ),
         AgentMessage(
             role="user",
             content=(
@@ -82,11 +95,11 @@ def build_messages(email: Message) -> list[AgentMessage]:
     ]
 
 
-def route(email: Message, state: State) -> None:
+def route(email: Message, state: State, *, feedback: str | None = None) -> None:
     """Classify email and write results into state.classifications and state.confidence_scores."""
     client = anthropic.Anthropic(api_key=os.getenv("ANTHROPIC_API_KEY"))
 
-    all_msgs = build_messages(email)
+    all_msgs = build_messages(email, feedback=feedback)
     system = next(m.content for m in all_msgs if m.role == "system")
     messages = [{"role": m.role, "content": m.content} for m in all_msgs if m.role != "system"]
 

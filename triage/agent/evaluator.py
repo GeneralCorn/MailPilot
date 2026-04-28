@@ -1,13 +1,23 @@
 import json
 import os
+from dataclasses import dataclass
 
 import anthropic
 
 from triage.schemas import AgentMessage, Category, Message, State
 
 _MODEL = "claude-sonnet-4-6"
-_LOW_CONFIDENCE_THRESHOLD = 0.65
-_HIGH_RISK_THRESHOLD = 0.6
+LOW_CONFIDENCE_THRESHOLD = 0.65
+HIGH_RISK_THRESHOLD = 0.6
+
+
+@dataclass(frozen=True)
+class EvaluatorResult:
+    final_category: Category
+    confidence: float
+    risk_score: float
+    needs_review: bool
+    explanation: str
 
 _SYSTEM = (
     "You are the Evaluator in MailPilot. Review the Router's email classification.\n"
@@ -86,8 +96,12 @@ def _build_messages(email: Message, category: Category, confidence: float) -> li
     ]
 
 
-def evaluate(email: Message, state: State) -> None:
-    """Verify classification and write risk_score into state; append to needs_review if flagged."""
+def evaluate(email: Message, state: State) -> EvaluatorResult:
+    """Verify the router's classification, write back to state, and return the structured result.
+
+    The loop driver decides whether to re-run the router or to mark needs_review;
+    this function only mutates the per-email scores in state.
+    """
     category = state.classifications.get(email.id, Category.UNCLASSIFIED)
     confidence = state.confidence_scores.get(email.id, 0.0)
 
@@ -112,16 +126,22 @@ def evaluate(email: Message, state: State) -> None:
             new_confidence = max(0.0, min(1.0, float(data.get("confidence", 0.5))))
             risk_score = max(0.0, min(1.0, float(data.get("risk_score", 0.0))))
             needs_review = bool(data.get("needs_review", False))
+            explanation = str(data.get("explanation", ""))
 
-            if risk_score > _HIGH_RISK_THRESHOLD or new_confidence < _LOW_CONFIDENCE_THRESHOLD:
+            if risk_score > HIGH_RISK_THRESHOLD or new_confidence < LOW_CONFIDENCE_THRESHOLD:
                 needs_review = True
 
             state.classifications[email.id] = final_category
             state.confidence_scores[email.id] = new_confidence
             state.risk_scores[email.id] = risk_score
-            if needs_review and email.id not in state.needs_review:
-                state.needs_review.append(email.id)
-            return
+
+            return EvaluatorResult(
+                final_category=final_category,
+                confidence=new_confidence,
+                risk_score=risk_score,
+                needs_review=needs_review,
+                explanation=explanation,
+            )
         except (json.JSONDecodeError, KeyError, ValueError):
             if attempt == 0:
                 messages = messages + [
@@ -140,5 +160,10 @@ def evaluate(email: Message, state: State) -> None:
             break
 
     state.risk_scores[email.id] = 0.0
-    if email.id not in state.needs_review:
-        state.needs_review.append(email.id)
+    return EvaluatorResult(
+        final_category=state.classifications.get(email.id, Category.UNCLASSIFIED),
+        confidence=state.confidence_scores.get(email.id, 0.0),
+        risk_score=0.0,
+        needs_review=True,
+        explanation="evaluator failed to produce valid output",
+    )
