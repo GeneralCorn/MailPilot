@@ -118,6 +118,13 @@ def rank(state: State) -> None:
         state.priority_queue = []
         return
 
+    # single-email batches don't need an LLM call; nothing to compare against
+    if len(state.messages) == 1:
+        m = state.messages[0]
+        state.priorities[m.id] = Priority.NORMAL
+        state.priority_queue = [(m.id, 0.5)]
+        return
+
     batch = state.messages[:MAX_BATCH]
     overflow = state.messages[MAX_BATCH:]
     for m in overflow:

@@ -54,17 +54,22 @@ def test_rank_writes_priority_queue_sorted_desc():
 
 
 def test_rank_repair_retry_succeeds_on_second_attempt():
-    state = State(messages=[_msg("a")])
-    state.classifications["a"] = Category.WORK
+    state = State(messages=[_msg("a"), _msg("b")])
+    state.classifications.update({"a": Category.WORK, "b": Category.MARKETING})
 
     bad = "not json at all"
-    good = '{"ranked":[{"email_id":"a","score":0.7,"priority":"important","reason":"x"}]}'
+    good = (
+        '{"ranked":['
+        '{"email_id":"a","score":0.7,"priority":"important","reason":"x"},'
+        '{"email_id":"b","score":0.1,"priority":"minimal","reason":"x"}'
+        "]}"
+    )
 
     with patch.object(ranker_mod.anthropic, "Anthropic", _fake_anthropic_factory([bad, good])):
         ranker_mod.rank(state)
 
     assert state.priorities["a"] == Priority.IMPORTANT
-    assert state.priority_queue == [("a", 0.7)]
+    assert state.priority_queue[0] == ("a", 0.7)
     assert "a" not in state.needs_review
 
 
@@ -124,6 +129,19 @@ def test_rank_handles_empty_state_as_noop():
     ranker_mod.rank(state)
     assert state.priority_queue == []
     assert state.priorities == {}
+
+
+def test_rank_short_circuits_for_single_email_without_llm():
+    state = State(messages=[_msg("solo")])
+
+    def boom(*args, **kwargs):
+        raise AssertionError("anthropic.Anthropic should not be called for single-email rank")
+
+    with patch.object(ranker_mod.anthropic, "Anthropic", boom):
+        ranker_mod.rank(state)
+
+    assert state.priorities["solo"] == Priority.NORMAL
+    assert state.priority_queue == [("solo", 0.5)]
 
 
 def test_rank_falls_back_on_anthropic_api_error():

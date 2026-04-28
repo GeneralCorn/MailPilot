@@ -64,8 +64,8 @@
     <span class="sub">Policy-Aware Email Triage</span>
   </div>
   <div class="topbar-actions">
-    <button class="btn btn-outline" onclick="importEmails()">Import Gmail</button>
-    <button class="btn btn-primary" onclick="runPipeline()">Run Triage</button>
+    <button class="btn btn-outline" onclick="importEmails(this)">Import Gmail</button>
+    <button class="btn btn-primary" onclick="runPipeline(this)">Run Triage</button>
   </div>
 </header>
 
@@ -120,7 +120,7 @@
     <div class="preview-body">{{ selected.body_plain|linebreaksbr }}</div>
     {% endif %}
     <div class="preview-actions">
-      <button class="btn btn-primary" onclick="triageEmail({{ selected.idx }})">Triage This Email</button>
+      <button class="btn btn-primary" onclick="triageEmail({{ selected.idx }}, this)">Triage This Email</button>
     </div>
     {% else %}
     <div class="empty-state">Select an email to preview</div>
@@ -149,10 +149,24 @@
 
 <script>
   function selectEmail(idx){const p=new URLSearchParams(location.search);p.set('selected',idx);location.search=p}
-  function post(url){fetch(url,{method:'POST'}).then(r=>r.json()).then(()=>location.reload()).catch(e=>alert(e))}
-  function importEmails(){post('/import/')}
-  function runPipeline(){post('/run-pipeline/')}
-  function triageEmail(idx){post('/email/'+idx+'/triage/')}
+  function post(url, btn){
+    let original = null;
+    if (btn) {
+      original = btn.textContent;
+      btn.disabled = true;
+      btn.textContent = 'Working…';
+    }
+    return fetch(url,{method:'POST'})
+      .then(r=>r.json())
+      .then(d=>{ if (d && d.error) { throw new Error(d.error); } location.reload(); })
+      .catch(e=>{
+        if (btn) { btn.disabled = false; btn.textContent = original; }
+        alert(e.message || e);
+      });
+  }
+  function importEmails(btn){post('/import/', btn)}
+  function runPipeline(btn){post('/run-pipeline/', btn)}
+  function triageEmail(idx, btn){post('/email/'+idx+'/triage/', btn)}
 </script>
 </body>
 </html>
