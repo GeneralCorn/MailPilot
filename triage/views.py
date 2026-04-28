@@ -5,7 +5,7 @@ from django.http import JsonResponse
 from django.views.decorators.http import require_POST
 
 from .schemas import Message, Priority, State
-from .pipeline import run_tool_calls
+from . import pipeline as pipeline_mod
 
 # Lower number = higher priority in sort order
 _TIER_ORDER = {p.value: i for i, p in enumerate(Priority)}
@@ -85,15 +85,20 @@ def import_emails(request):
 
 @require_POST
 def run_pipeline(request):
-    emails = _load()
-    messages = [Message(**e) for e in emails]
-    state = State(messages=messages)
-    state, trace = run_tool_calls(state)
+    raw = _load()
+    if not raw:
+        return JsonResponse({"error": "no emails to process"}, status=400)
+    messages = [Message(**e) for e in raw]
+    state, run_id = pipeline_mod.run_pipeline(messages)
+    by_status: dict[str, int] = {}
+    for status in state.email_status.values():
+        key = status.value if hasattr(status, "value") else str(status)
+        by_status[key] = by_status.get(key, 0) + 1
     return JsonResponse(
         {
-            "status": "pipeline_stub",
-            "message_count": len(state.messages),
-            "tool_calls": len(trace.tool_calls),
-            "tool_results": len(trace.tool_results),
+            "run_id": run_id,
+            "processed_count": len(state.email_status),
+            "by_status": by_status,
+            "needs_review": list(state.needs_review),
         }
     )
