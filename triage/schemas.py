@@ -103,6 +103,8 @@ class State(BaseModel):
     worker_actions: dict[str, list[ToolCall]] = Field(default_factory=dict)
     sub_action_results: dict[str, list[ToolResult]] = Field(default_factory=dict)
     iteration_counts: dict[str, int] = Field(default_factory=dict)
+    # router's first-iteration output, preserved before evaluator can override classifications
+    router_outputs: dict[str, dict[str, Any]] = Field(default_factory=dict)
 
 
 class Trace(BaseModel):

@@ -30,6 +30,11 @@ def route_eval_loop(email: Message, state: State) -> EvaluatorResult:
     while iterations < MAX_ROUTER_EVAL_ITERATIONS:
         iterations += 1
         route(email, state, feedback=feedback)
+        if email.id not in state.router_outputs:
+            state.router_outputs[email.id] = {
+                "category": state.classifications.get(email.id, Category.UNCLASSIFIED).value,
+                "confidence": state.confidence_scores.get(email.id, 0.0),
+            }
         result = evaluate(email, state)
 
         if _is_reliable(result):
