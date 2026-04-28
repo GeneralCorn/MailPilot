@@ -130,7 +130,20 @@
   <!-- RIGHT: Task Queue -->
   <aside class="task-panel">
     <h3>Task Queue</h3>
+    {% if tasks %}
+    <ul class="task-list">
+      {% for t in tasks %}
+      <li class="task-item" onclick="selectEmail({{ t.idx }})">
+        <div class="task-status status-{{ t.status_label }}">{{ t.status_label }}</div>
+        <div class="task-subject">{{ t.subject }}</div>
+        <div class="task-meta">{{ t.category }} · {{ t.sender }}</div>
+        {% if t.reason %}<div class="task-reason">{{ t.reason }}</div>{% endif %}
+      </li>
+      {% endfor %}
+    </ul>
+    {% else %}
     <div class="empty-state">No pending tasks. Run triage to generate actions.</div>
+    {% endif %}
   </aside>
 </main>
 

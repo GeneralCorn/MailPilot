@@ -122,7 +122,19 @@ def run_pipeline(
 
         def _worker_op(s: State, _m: Message = m, _eid: str = eid) -> None:
             status = work(_m, s, runtime=runtime)
-            persistence.update_email_state(_eid, status=status.value)
+            fields: dict = {"status": status.value}
+            cat = s.classifications.get(_eid)
+            if cat is not None:
+                fields["category"] = cat.value if hasattr(cat, "value") else str(cat)
+            prio = s.priorities.get(_eid)
+            if prio is not None:
+                fields["priority"] = prio.value if hasattr(prio, "value") else str(prio)
+            rank_idx = next(
+                (i for i, (e, _s) in enumerate(s.priority_queue) if e == _eid), None
+            )
+            if rank_idx is not None:
+                fields["priority_rank"] = rank_idx
+            persistence.update_email_state(_eid, **fields)
             persistence.mark_processed(_eid, run_id, status)
 
         run_stage("worker", _worker_op, state, run_id=run_id, email_id=eid)

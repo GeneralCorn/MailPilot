@@ -11,9 +11,13 @@ from . import pipeline as pipeline_mod
 _TIER_ORDER = {p.value: i for i, p in enumerate(Priority)}
 _DEFAULT_TIER = len(Priority)
 
+_ATTENTION_STATUSES = {"flagged", "partial_done", "pending"}
+
+
 def inbox(request):
     emails = load_inbox()
     category = request.GET.get("category")
+    tasks = _build_task_queue(emails)
     if category:
         filtered = [e for e in emails if e.get("category", "unclassified") == category]
     else:
@@ -42,9 +46,34 @@ def inbox(request):
     return render(request, "triage/inbox.html", {
         "emails": email_list,
         "selected": selected,
-        "tasks": [],
+        "tasks": tasks,
         "current_category": category or "all",
     })
+
+
+def _build_task_queue(emails: list[dict]) -> list[dict]:
+    """Emails that worked but need follow-up: flagged / partial_done / pending."""
+    out: list[dict] = []
+    for i, e in enumerate(emails):
+        status = (e.get("status") or "").strip()
+        escalations = e.get("escalations") or []
+        notes = e.get("notes") or []
+        if status in _ATTENTION_STATUSES or escalations:
+            label = status or ("flagged" if escalations else "")
+            reason = ""
+            if escalations:
+                reason = escalations[-1].get("reason", "")
+            elif notes:
+                reason = notes[-1].get("text", "")
+            out.append({
+                "idx": i,
+                "subject": e.get("subject", "(no subject)"),
+                "sender": e.get("sender", ""),
+                "status_label": label,
+                "category": e.get("category", ""),
+                "reason": reason,
+            })
+    return out
 
 
 def email_detail(request, idx):
@@ -56,11 +85,38 @@ def email_detail(request, idx):
 
 @require_POST
 def triage_email(request, idx):
-    # TODO: call agent pipeline
+    import os
+    if not os.environ.get("ANTHROPIC_API_KEY"):
+        return JsonResponse(
+            {"error": "ANTHROPIC_API_KEY is not set; pipeline cannot run"}, status=400
+        )
     emails = _load()
     if idx >= len(emails):
         return JsonResponse({"error": "not found"}, status=404)
-    return JsonResponse({"status": "ok", "idx": idx})
+
+    msg = Message(**emails[idx])
+    try:
+        state, run_id = pipeline_mod.run_pipeline([msg])
+    except Exception as exc:
+        return JsonResponse(
+            {"error": f"{type(exc).__name__}: {exc}"}, status=500
+        )
+
+    from . import persistence
+    state_row = persistence.get_email_state(msg.id)
+    final_status = state.email_status.get(msg.id)
+
+    return JsonResponse(
+        {
+            "run_id": run_id,
+            "idx": idx,
+            "email_id": msg.id,
+            "category": state_row.get("category"),
+            "priority": state_row.get("priority"),
+            "status": final_status.value if final_status else state_row.get("status"),
+            "needs_review": msg.id in state.needs_review,
+        }
+    )
 
 
 @require_POST

@@ -83,9 +83,9 @@ _DDL = (
     """,
 )
 
-_conn: sqlite3.Connection | None = None
-_conn_lock = threading.Lock()
-_conn_pid: int | None = None
+_conn_storage = threading.local()
+_db_path_lock = threading.Lock()
+_db_path: Path | None = None
 
 
 def _utcnow() -> str:
@@ -104,33 +104,47 @@ def init_db(db_path: Path | None = None, *, migrate_from_json: bool = True) -> s
 
 
 def get_conn(db_path: Path | None = None) -> sqlite3.Connection:
-    """Per-process singleton connection. Pass db_path only on first call (or after reset_conn)."""
-    global _conn, _conn_pid
-    import os
-    pid = os.getpid()
-    with _conn_lock:
-        if _conn is not None and _conn_pid == pid:
-            return _conn
-        target = db_path or DB_PATH
-        target.parent.mkdir(parents=True, exist_ok=True)
-        _conn = sqlite3.connect(str(target), check_same_thread=False, isolation_level=None)
-        _conn.execute("PRAGMA journal_mode=WAL")
-        _conn.execute("PRAGMA foreign_keys=ON")
-        _conn_pid = pid
-        return _conn
+    """Thread-local connection. SQLite handles cross-thread synchronization via WAL."""
+    global _db_path
+    with _db_path_lock:
+        if db_path is not None:
+            _db_path = db_path
+        target = _db_path or DB_PATH
+
+    existing = getattr(_conn_storage, "conn", None)
+    if existing is not None:
+        existing_path = getattr(_conn_storage, "path", None)
+        if existing_path == str(target):
+            return existing
+        try:
+            existing.close()
+        except sqlite3.Error:
+            pass
+
+    target.parent.mkdir(parents=True, exist_ok=True)
+    conn = sqlite3.connect(str(target), isolation_level=None)
+    conn.execute("PRAGMA journal_mode=WAL")
+    conn.execute("PRAGMA foreign_keys=ON")
+    _conn_storage.conn = conn
+    _conn_storage.path = str(target)
+    return conn
 
 
 def reset_conn() -> None:
-    """For tests: drop the cached connection so the next get_conn opens a fresh one."""
-    global _conn, _conn_pid
-    with _conn_lock:
-        if _conn is not None:
-            try:
-                _conn.close()
-            except sqlite3.Error:
-                pass
-        _conn = None
-        _conn_pid = None
+    """Drop this thread's connection and forget any pinned db path. Used by tests."""
+    global _db_path
+    existing = getattr(_conn_storage, "conn", None)
+    if existing is not None:
+        try:
+            existing.close()
+        except sqlite3.Error:
+            pass
+    if hasattr(_conn_storage, "conn"):
+        del _conn_storage.conn
+    if hasattr(_conn_storage, "path"):
+        del _conn_storage.path
+    with _db_path_lock:
+        _db_path = None
 
 
 def start_run(run_id: str) -> None:
