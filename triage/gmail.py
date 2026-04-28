@@ -85,16 +85,18 @@ def fetch_emails(max_results=20):
     emails = []
     for msg_info in messages:
         msg = service.users().messages().get(userId="me", id=msg_info["id"], format="full").execute()
-        headers = {h["name"]: h["value"] for h in msg["payload"]["headers"]}
+        # Gmail headers come back in whatever case the sender used. Inbound mail uses "Subject"/"From",
+        # but messages sent via MIMEText come back lowercased ("subject"/"from"). Normalize.
+        headers = {h["name"].lower(): h["value"] for h in msg["payload"]["headers"]}
         payload = msg["payload"]
 
         # Prefer HTML, fall back to plain text
         body_html = _extract_part(payload, "text/html")
         body_plain = _extract_part(payload, "text/plain")
 
-        sender_name, sender_email = parseaddr(headers.get("From", ""))
+        sender_name, sender_email = parseaddr(headers.get("from", ""))
         received_at = None
-        date_str = headers.get("Date", "")
+        date_str = headers.get("date", "")
         if date_str:
             try:
                 received_at = parsedate_to_datetime(date_str)
@@ -103,10 +105,10 @@ def fetch_emails(max_results=20):
 
         emails.append({
             "id": msg["id"],
-            "subject": headers.get("Subject", "(no subject)"),
+            "subject": headers.get("subject", "(no subject)"),
             "sender": sender_email,
             "sender_name": sender_name,
-            "recipient": parseaddr(headers.get("To", ""))[1],
+            "recipient": parseaddr(headers.get("to", ""))[1],
             "body_html": body_html,
             "body_plain": body_plain,
             "snippet": msg.get("snippet", "")[:300],
