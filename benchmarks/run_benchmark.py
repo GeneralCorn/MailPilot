@@ -1,30 +1,14 @@
-"""Run benchmark scenarios through the live MailPilot pipeline and dump artifacts.
-
-Quick testing usage:
-    python3 benchmarks/run_benchmark.py --difficulty easy
-    python3 benchmarks/run_benchmark.py --scenario E1
-    python3 benchmarks/run_benchmark.py --difficulty all --compare
-    python3 benchmarks/run_benchmark.py --scenario M3 --max-emails 3
-
-What it does:
-    1. Loads benchmark scenario JSON(s) from benchmarks/scenarios/
-    2. Wipes prior pipeline state for those email IDs (so reruns are clean)
-    3. Calls triage.pipeline.run_pipeline on each scenario's emails
-    4. Reads per-email artifacts back from sqlite (and the live State)
-    5. Prints a compact human-readable report and writes JSON results
-
-Calendar / send_email / reply_draft become PROPOSALS — they do not fire
-real Google API calls until you approve them in the UI. So this script is
-safe to run repeatedly without polluting your inbox or calendar.
-"""
+"""Run benchmark scenarios through the live MailPilot pipeline and dump artifacts."""
 from __future__ import annotations
 
 import argparse
 import json
 import os
 import sqlite3
+import subprocess
 import sys
 import time
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
@@ -32,25 +16,36 @@ REPO_ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(REPO_ROOT))
 os.environ.setdefault("DJANGO_SETTINGS_MODULE", "mailpilot.settings")
 
-# Process --backend BEFORE django.setup() so settings.py sees the right env var
-# and applies the ANTHROPIC_API_KEY stub when running on Tinker.
-def _early_backend_override():
-    for i, a in enumerate(sys.argv):
-        if a == "--backend" and i + 1 < len(sys.argv):
-            os.environ["MAILPILOT_LLM_BACKEND"] = sys.argv[i + 1]
-            return
-        if a.startswith("--backend="):
-            os.environ["MAILPILOT_LLM_BACKEND"] = a.split("=", 1)[1]
-            return
-_early_backend_override()
-
 import django  # noqa: E402
 
 django.setup()
 
 from triage import persistence  # noqa: E402
+from triage.agent import _usage  # noqa: E402
+from triage.agent._client import default_model  # noqa: E402
 from triage.pipeline import run_pipeline  # noqa: E402
 from triage.schemas import Message  # noqa: E402
+
+
+# Approximate published per-1M-token pricing in USD.
+_PRICES_PER_MTOK: dict[str, tuple[float, float]] = {
+    "deepseek-chat": (0.27, 1.10),
+    "claude-sonnet-4-6": (3.00, 15.00),
+}
+
+
+def estimate_cost_usd(model: str, input_tokens: int, output_tokens: int) -> float:
+    inp, outp = _PRICES_PER_MTOK.get(model, (0.0, 0.0))
+    return (input_tokens * inp + output_tokens * outp) / 1_000_000
+
+
+def _git_commit() -> str:
+    try:
+        return subprocess.check_output(
+            ["git", "rev-parse", "--short", "HEAD"], cwd=REPO_ROOT, text=True
+        ).strip()
+    except Exception:
+        return "unknown"
 
 
 SCEN_DIR = REPO_ROOT / "benchmarks" / "scenarios"
@@ -178,9 +173,13 @@ def run_one_scenario(
     gt = load_ground_truth(sid) if show_gt else None
     gt_by_id = {row["id"]: row for row in (gt["per_email"] if gt else [])}
 
+    _usage.reset()
     t0 = time.time()
     state, run_id = run_pipeline(msgs)
     elapsed = time.time() - t0
+    usage = _usage.snapshot()
+    model = default_model()
+    usage["estimated_cost_usd"] = estimate_cost_usd(model, usage["input_tokens"], usage["output_tokens"])
 
     print(f"\n[run_id: {run_id}]   total time: {elapsed:.1f}s   ({elapsed/len(emails):.1f}s/email)\n")
 
@@ -295,6 +294,11 @@ def run_one_scenario(
         "difficulty": diff,
         "run_id": run_id,
         "elapsed_seconds": elapsed,
+        "model": model,
+        "git_commit": _git_commit(),
+        "timestamp": datetime.now(timezone.utc).isoformat(),
+        "temperature": 0.0,
+        "usage": usage,
         "per_email": results,
     }
 
@@ -313,22 +317,14 @@ def main():
                     help="Show summaries, drafts, and other long fields.")
     ap.add_argument("--output", default=None,
                     help="Path to write the JSON results (default: benchmarks/results/<timestamp>.json).")
-    ap.add_argument("--backend", choices=["anthropic", "tinker"], default=None,
-                    help="LLM backend. Defaults to MAILPILOT_LLM_BACKEND from .env, or 'anthropic'.")
+    ap.add_argument("--max-cost-usd", type=float, default=None,
+                    help="Abort the run if accumulated estimated cost crosses this cap.")
     args = ap.parse_args()
 
-    backend = (args.backend
-               or os.environ.get("MAILPILOT_LLM_BACKEND")
-               or "anthropic")
-    if backend == "tinker":
-        if not os.environ.get("TINKER_API_KEY"):
-            print("ERROR: TINKER_API_KEY is not set. Add it to .env and rerun.")
-            sys.exit(1)
-    else:
-        if not os.environ.get("ANTHROPIC_API_KEY") or os.environ.get("ANTHROPIC_API_KEY", "").startswith("tinker-stub"):
-            print("ERROR: ANTHROPIC_API_KEY is not set. Add it to .env or pass --backend tinker.")
-            sys.exit(1)
-    print(f"LLM backend: {backend}")
+    if not (os.environ.get("DEEPSEEK_API_KEY") or os.environ.get("ANTHROPIC_API_KEY")):
+        print("ERROR: set DEEPSEEK_API_KEY (or ANTHROPIC_API_KEY with LLM_PROVIDER=anthropic).")
+        sys.exit(1)
+    print(f"Model: {default_model()}")
 
     persistence.init_db()
 
@@ -339,6 +335,7 @@ def main():
     all_results = []
     overall_correct = 0
     overall_total = 0
+    cost_so_far = 0.0
     for sid in sids:
         try:
             scen = load_scenario(sid)
@@ -352,6 +349,10 @@ def main():
             verbose=args.verbose,
         )
         all_results.append(out)
+        cost_so_far += out["usage"]["estimated_cost_usd"]
+        if args.max_cost_usd is not None and cost_so_far > args.max_cost_usd:
+            print(f"\nABORT: estimated cost ${cost_so_far:.4f} exceeds cap ${args.max_cost_usd:.4f}")
+            break
         if args.compare:
             for er in out["per_email"]:
                 gt = er.get("ground_truth")

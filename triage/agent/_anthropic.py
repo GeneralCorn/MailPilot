@@ -4,6 +4,8 @@ from typing import Any
 
 import anthropic
 
+from . import _usage
+
 
 def call_tools(
     client: anthropic.Anthropic,
@@ -14,6 +16,7 @@ def call_tools(
     tools: list[dict],
     force_tool: str | None = None,
     max_tokens: int = 1024,
+    temperature: float = 0.0,
 ) -> list[dict] | None:
     """Make an Anthropic messages.create() call requesting structured tool use.
 
@@ -25,6 +28,7 @@ def call_tools(
     kwargs: dict = {
         "model": model,
         "max_tokens": max_tokens,
+        "temperature": temperature,
         "system": system,
         "messages": messages,
         "tools": tools,
@@ -36,6 +40,13 @@ def call_tools(
         resp = client.messages.create(**kwargs)
     except anthropic.APIError:
         return None
+
+    usage = getattr(resp, "usage", None)
+    if usage is not None:
+        _usage.record(
+            getattr(usage, "input_tokens", 0) or 0,
+            getattr(usage, "output_tokens", 0) or 0,
+        )
 
     out: list[dict] = []
     for block in resp.content:

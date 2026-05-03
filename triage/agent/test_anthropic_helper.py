@@ -54,6 +54,8 @@ def test_call_tools_skips_non_tool_use_blocks():
 
     fake_resp = MagicMock()
     fake_resp.content = [text_block, tool_block]
+    fake_resp.usage.input_tokens = 0
+    fake_resp.usage.output_tokens = 0
 
     fake_client = MagicMock()
     fake_client.messages.create.return_value = fake_resp

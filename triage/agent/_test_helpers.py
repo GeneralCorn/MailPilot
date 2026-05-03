@@ -32,6 +32,8 @@ def fake_anthropic_with_tool_calls(calls_per_request: list[list[tuple[str, dict]
                 raise anthropic.APIError(message="boom", request=MagicMock(), body=None)
             resp = MagicMock()
             resp.content = [make_tool_use_block(name, inp) for name, inp in entry]
+            resp.usage.input_tokens = 10
+            resp.usage.output_tokens = 5
             return resp
         client.messages.create.side_effect = lambda **kw: create(**kw)
         return client
