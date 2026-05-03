@@ -5,7 +5,7 @@ Policy-aware batch email triage agent. A four-stage LLM pipeline (Router → Eva
 The repo contains:
 - `triage/` — the agent pipeline (Django app)
 - `mailpilot/` — Django project skeleton
-- `benchmarks/` — 10-scenario benchmark, baselines, scoring, and the runner used for paper Tables 1+2
+- `benchmarks/` — 10-scenario benchmark, baselines, scoring, and the runner that produces the two summary tables (overall performance + TSR by difficulty tier)
 - `evaluation/` — older router/evaluator-only diagnostic harness (not used for the headline numbers)
 
 ## Setup
@@ -43,7 +43,10 @@ State lives in `database/mailpilot.sqlite3`. Wipe it (`rm database/mailpilot.sql
 
 ## Reproduce the paper results
 
-The headline numbers (Table 1 + Table 2) come from `benchmarks/run_benchmark.py`. Each agent runs every scenario 3 times.
+`benchmarks/run_benchmark.py` runs each agent on every scenario 3 times and aggregates two markdown tables into `report.md`:
+
+- **Overall performance** — per agent: TSR, macro-F1, tier accuracy, risk-handling error count, LLM calls per email.
+- **TSR by difficulty tier** — per agent × {Easy, Medium, Hard}.
 
 Pre-flight (validates the 10 ground-truth files):
 
@@ -60,7 +63,7 @@ Run all four agents into one shared run directory:
 .venv/bin/python benchmarks/run_benchmark.py --agent mailpilot  --difficulty all --trials 3 --run-id paper --max-cost-usd 10
 ```
 
-Aggregate into Table 1 + Table 2:
+Aggregate the trial JSONs into the report:
 
 ```bash
 .venv/bin/python -m benchmarks.scoring.aggregate benchmarks/results/paper
