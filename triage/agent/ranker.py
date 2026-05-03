@@ -1,5 +1,4 @@
 import json
-import os
 from datetime import datetime, timezone
 
 import anthropic
@@ -8,8 +7,7 @@ from triage.schemas import AgentMessage, Category, Priority, State
 
 from ._anthropic import call_tools
 from ._caching import to_cached_request
-
-_MODEL = "claude-sonnet-4-6"
+from ._client import client_kwargs, default_model
 MAX_BATCH = 100
 
 _SYSTEM = (
@@ -159,13 +157,13 @@ def rank(state: State) -> None:
     for m in overflow:
         state.priorities[m.id] = Priority.NORMAL
 
-    client = anthropic.Anthropic(api_key=os.getenv("ANTHROPIC_API_KEY"))
+    client = anthropic.Anthropic(**client_kwargs())
     all_msgs = _build_messages(_build_batch(state, batch))
     system, messages = to_cached_request(all_msgs)
 
     result = call_tools(
         client,
-        model=_MODEL,
+        model=default_model(),
         system=system,
         messages=messages,
         tools=[_TOOL],

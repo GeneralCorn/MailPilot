@@ -1,13 +1,10 @@
-import os
-
 import anthropic
 
 from triage.schemas import AgentMessage, Category, Message, State
 
 from ._anthropic import call_tools
 from ._caching import to_cached_request
-
-_MODEL = "claude-sonnet-4-6"
+from ._client import client_kwargs, default_model
 
 _SYSTEM = (
     "You are the Router in MailPilot. Classify the incoming email into exactly one category:\n"
@@ -137,14 +134,14 @@ def build_messages(email: Message, feedback: str | None = None) -> list[AgentMes
 
 def route(email: Message, state: State, *, feedback: str | None = None) -> None:
     """Classify email and write results into state.classifications and state.confidence_scores."""
-    client = anthropic.Anthropic(api_key=os.getenv("ANTHROPIC_API_KEY"))
+    client = anthropic.Anthropic(**client_kwargs())
 
     all_msgs = build_messages(email, feedback=feedback)
     system, messages = to_cached_request(all_msgs)
 
     result = call_tools(
         client,
-        model=_MODEL,
+        model=default_model(),
         system=system,
         messages=messages,
         tools=[_TOOL],

@@ -4,7 +4,7 @@
 
 - Python 3.11+
 - A Google Cloud project with **Gmail API** and **Google Calendar API** enabled
-- An Anthropic API key
+- A DeepSeek API key (default), or an Anthropic API key
 
 ## One-time setup
 
@@ -24,9 +24,18 @@ In Google Cloud Console:
 3. APIs & Services → Credentials → Create Credentials → **OAuth client ID** → **Desktop app**
 4. Download the JSON and save it as `credentials.json` at the repo root
 
-### 3. Set the Anthropic key
+### 3. Set the LLM key
+
+By default the agents call DeepSeek's `deepseek-chat` model via its Anthropic-compatible endpoint:
 
 ```bash
+export DEEPSEEK_API_KEY=sk-...
+```
+
+To use upstream Anthropic Claude (`claude-sonnet-4-6`) instead:
+
+```bash
+export LLM_PROVIDER=anthropic
 export ANTHROPIC_API_KEY=sk-ant-...
 ```
 
@@ -83,4 +92,6 @@ rm database/mailpilot.sqlite3*
 
 ## Cost
 
-With Sonnet 4.6 + Anthropic prompt caching, a 25-email batch is roughly **$0.20–0.50** on first run and **~$0.10** if re-run within 5 minutes (cache hits).
+DeepSeek `deepseek-chat` is the default and is materially cheaper than Sonnet — a 25-email batch typically costs a few cents.
+
+If you switch to Anthropic Sonnet 4.6 (`LLM_PROVIDER=anthropic`), with prompt caching a 25-email batch is roughly **$0.20–0.50** on first run and **~$0.10** if re-run within 5 minutes (cache hits).

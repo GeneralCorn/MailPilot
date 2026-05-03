@@ -125,9 +125,10 @@ def email_detail(request, idx):
 @require_POST
 def triage_email(request, idx):
     import os
-    if not os.environ.get("ANTHROPIC_API_KEY"):
+    if not (os.environ.get("DEEPSEEK_API_KEY") or os.environ.get("ANTHROPIC_API_KEY")):
         return JsonResponse(
-            {"error": "ANTHROPIC_API_KEY is not set; pipeline cannot run"}, status=400
+            {"error": "DEEPSEEK_API_KEY is not set (or ANTHROPIC_API_KEY with LLM_PROVIDER=anthropic); pipeline cannot run"},
+            status=400,
         )
     emails = _load()
     if idx >= len(emails):

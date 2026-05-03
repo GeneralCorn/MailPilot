@@ -1,4 +1,3 @@
-import os
 from dataclasses import dataclass
 
 import anthropic
@@ -7,8 +6,7 @@ from triage.schemas import AgentMessage, Category, Message, State
 
 from ._anthropic import call_tools
 from ._caching import to_cached_request
-
-_MODEL = "claude-sonnet-4-6"
+from ._client import client_kwargs, default_model
 LOW_CONFIDENCE_THRESHOLD = 0.65
 HIGH_RISK_THRESHOLD = 0.6
 
@@ -195,13 +193,13 @@ def evaluate(email: Message, state: State) -> EvaluatorResult:
     category = state.classifications.get(email.id, Category.UNCLASSIFIED)
     confidence = state.confidence_scores.get(email.id, 0.0)
 
-    client = anthropic.Anthropic(api_key=os.getenv("ANTHROPIC_API_KEY"))
+    client = anthropic.Anthropic(**client_kwargs())
     all_msgs = _build_messages(email, category, confidence)
     system, messages = to_cached_request(all_msgs)
 
     result = call_tools(
         client,
-        model=_MODEL,
+        model=default_model(),
         system=system,
         messages=messages,
         tools=[_TOOL],

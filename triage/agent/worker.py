@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import os
 import time
 from typing import TYPE_CHECKING
 
@@ -17,11 +16,10 @@ from triage.schemas import (
 )
 
 from ._anthropic import call_tools
+from ._client import client_kwargs, default_model
 
 if TYPE_CHECKING:
     from triage.runtime import Runtime
-
-_MODEL = "claude-sonnet-4-6"
 MAX_RETRIES = 3
 MAX_ITERATIONS = 5
 
@@ -260,13 +258,13 @@ def plan_actions(
     email: Message, state: State, prior_results: list[ToolResult] | None = None
 ) -> list[ToolCall]:
     category = state.classifications.get(email.id, Category.UNCLASSIFIED)
-    client = anthropic.Anthropic(api_key=os.getenv("ANTHROPIC_API_KEY"))
+    client = anthropic.Anthropic(**client_kwargs())
 
     messages = _fewshot_messages() + [_target_user_message(email, category, prior_results)]
 
     result = call_tools(
         client,
-        model=_MODEL,
+        model=default_model(),
         system=_SYSTEM,
         messages=messages,
         tools=_TOOLS,
