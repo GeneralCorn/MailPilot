@@ -1,0 +1,63 @@
+{
+  "scenario_id": "M1",
+  "scenario_name": "Startup CTO inbox",
+  "difficulty": "medium",
+  "emails": [
+    {
+      "id": "m1_e01",
+      "subject": "AWS bill — March usage summary, $48,217.44",
+      "sender": "AWS Billing <no-reply-aws@amazon.com>",
+      "body_plain": "Your AWS bill for March is now available.\n\nTotal: $48,217.44\nLargest line items:\n- EC2: $29,108\n- RDS: $7,402\n- Data transfer: $4,919\n\nPayment will be charged on April 20 to the card on file. Detailed breakdown available in the AWS billing console.",
+      "received_at": "2026-04-15T03:14:00Z",
+      "thread_id": null
+    },
+    {
+      "id": "m1_e02",
+      "subject": "Save 60% on Datadog — limited-time enterprise pricing",
+      "sender": "Datadog Sales <enterprise-deals@datadog-sales.io>",
+      "body_plain": "We're rolling out time-limited pricing for engineering leaders at growth-stage startups. 60% off enterprise tier for 12 months if you commit by April 30.\n\nThis is a once-a-year offer. Reply or grab a 15-min slot on my calendar to discuss.\n\nKevin Russo, Strategic Accounts",
+      "received_at": "2026-04-15T05:00:00Z",
+      "thread_id": null
+    },
+    {
+      "id": "m1_e03",
+      "subject": "Action required: confirm wire transfer to vendor account",
+      "sender": "Finance <finance@stripe-payouts-verify.net>",
+      "body_plain": "We're holding a $42,000 wire transfer to your AWS account that was flagged by our compliance team. Please confirm by reuploading the invoice and approving the wire at the link below within 24 hours, or the transfer will be reversed.\n\nApprove wire: http://stripe-payouts-verify.net/approve?id=99412\n\n— Stripe Compliance",
+      "received_at": "2026-04-15T07:42:00Z",
+      "thread_id": null
+    },
+    {
+      "id": "m1_e04",
+      "subject": "Board meeting — Tuesday April 22, 9-11am PT",
+      "sender": "Sarah Lin <sarah@northstartventures.com>",
+      "body_plain": "Hi Alex,\n\nConfirming our Q2 board meeting for Tuesday April 22, 9-11am PT, at our offices (or via Meet — link forthcoming).\n\nPlease send the board deck draft by EOD Friday so we can review ahead of time. Standard topics: revenue, hiring, runway, and the platform roadmap update.\n\n— Sarah",
+      "received_at": "2026-04-15T09:00:00Z",
+      "thread_id": null
+    },
+    {
+      "id": "m1_e05",
+      "subject": "Re: prod incident postmortem follow-ups",
+      "sender": "Priya Raman <priya@auroralabs.io>",
+      "body_plain": "Hey,\n\nWriting up the postmortem from yesterday's outage. Two open questions for you before I publish:\n\n1. Do we want to ship the failover automation as a P0 or P1 next sprint?\n2. Should we loop in security on the auth-service blast radius?\n\nNeed your call by tomorrow EOD so I can finalize action items.\n\n— Priya",
+      "received_at": "2026-04-15T10:30:00Z",
+      "thread_id": null
+    },
+    {
+      "id": "m1_e06",
+      "subject": "GitHub: weekly dependency security advisory digest",
+      "sender": "GitHub <noreply@github.com>",
+      "body_plain": "12 dependency advisories were posted in your repos this week. 2 high severity, 4 medium, 6 low.\n\nView in the security tab. Auto-merge enabled for low-severity Dependabot PRs.",
+      "received_at": "2026-04-15T13:00:00Z",
+      "thread_id": null
+    },
+    {
+      "id": "m1_e07",
+      "subject": "TLDR — engineering management",
+      "sender": "TLDR ENG <eng-newsletter@tldrnewsletter.com>",
+      "body_plain": "This week's top reads for engineering leaders.\n\n1. The cost of microservices at scale\n2. Why your on-call rotation is broken\n3. Hiring senior engineers in 2026\n\nUnsubscribe | Manage preferences",
+      "received_at": "2026-04-15T15:00:00Z",
+      "thread_id": null
+    }
+  ]
+}

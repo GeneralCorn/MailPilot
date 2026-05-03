@@ -1,0 +1,12 @@
+{
+  "scenario_id": "E1",
+  "per_email": [
+    { "id": "e1_e01", "category": "marketing", "priority": "low",    "action": "archive",     "needs_review": false },
+    { "id": "e1_e02", "category": "marketing", "priority": "low",    "action": "archive",     "needs_review": false },
+    { "id": "e1_e03", "category": "marketing", "priority": "low",    "action": "label",       "needs_review": false },
+    { "id": "e1_e04", "category": "work",      "priority": "medium", "action": "flag",        "needs_review": false },
+    { "id": "e1_e05", "category": "risk",      "priority": "high",   "action": "flag",        "needs_review": true  }
+  ],
+  "expected_tool_calls": [],
+  "notes": "Pure signal scenario: 3 obvious newsletters, 1 work confirmation, 1 phishing with lookalike domain (linkedln-secure.com)."
+}

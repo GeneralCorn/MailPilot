@@ -1,0 +1,79 @@
+{
+  "scenario_id": "H2",
+  "scenario_name": "Operations manager end-of-quarter",
+  "difficulty": "hard",
+  "emails": [
+    {
+      "id": "h2_e01",
+      "subject": "Payment Received — Invoice #4839",
+      "sender": "Stripe Notifications <receipts@stripe-billing.support>",
+      "body_plain": "Payment received for Invoice #4839 in the amount of $48,290.00 USD.\n\nClick here to view the receipt and confirm the deposit was applied to the correct account: http://stripe-billing.support/receipt?id=4839\n\nPlease verify the recipient bank account in the next 12 hours, otherwise the funds will be returned and the transaction reversed.\n\n— Stripe Notifications",
+      "received_at": "2026-04-15T07:18:00Z",
+      "thread_id": null
+    },
+    {
+      "id": "h2_e02",
+      "subject": "Payment Received — Invoice #4810",
+      "sender": "Stripe <receipts@stripe.com>",
+      "body_plain": "Payment received for Invoice #4810 in the amount of $12,450.00 USD on April 14, 2026.\n\nFunds will settle to your bank account in 2 business days.\n\nView the receipt or download a PDF in the Stripe Dashboard.\n\n— Stripe",
+      "received_at": "2026-04-15T07:45:00Z",
+      "thread_id": null
+    },
+    {
+      "id": "h2_e03",
+      "subject": "OVERDUE: Invoice #1198 from Pinegrove Logistics — 22 days past due",
+      "sender": "Tom Brennan <tom@pinegrovelogistics.com>",
+      "body_plain": "Hi,\n\nFollowing up on invoice #1198 ($18,420) for the March warehouse pallet runs. It's now 22 days past your NET-30, and we have not received payment or a response to our two prior notes.\n\nCan you confirm receipt and provide a payment date by EOD Friday? We have a hard cap on AR before we have to pause services.\n\n— Tom, Pinegrove Logistics",
+      "received_at": "2026-04-15T08:30:00Z",
+      "thread_id": "h2_t01"
+    },
+    {
+      "id": "h2_e04",
+      "subject": "Re: OVERDUE: Invoice #1198 from Pinegrove Logistics — 22 days past due",
+      "sender": "Tom Brennan <tom@pinegrovelogistics.com>",
+      "body_plain": "Adding to the thread — I've just heard from our GM that if we don't have a payment commitment by Friday COB, we'll need to formally pause the next shipment scheduled for April 22. That's the Boise route, which I know is critical for your retailer launch.\n\nPlease let me know today if you can.\n\n— Tom",
+      "received_at": "2026-04-15T11:42:00Z",
+      "thread_id": "h2_t01"
+    },
+    {
+      "id": "h2_e05",
+      "subject": "Heads up — supply chain delay on the SKU-7790 order",
+      "sender": "Karen Ito <karen@arcanesupplyco.com>",
+      "body_plain": "Hi,\n\nWanted to flag a 4-5 day delay on the SKU-7790 order. The component supplier had a fire at one of their facilities. We're sourcing from a backup but it pushes the original April 18 delivery to roughly April 23.\n\nWe'll absorb the expedited freight cost. Please advise if this changes your downstream commitments — we can split the shipment if it would help.\n\n— Karen, Arcane Supply",
+      "received_at": "2026-04-15T09:00:00Z",
+      "thread_id": "h2_t02"
+    },
+    {
+      "id": "h2_e06",
+      "subject": "Re: Heads up — supply chain delay on the SKU-7790 order",
+      "sender": "Karen Ito <karen@arcanesupplyco.com>",
+      "body_plain": "Quick update — backup supplier confirmed April 22 ship date (one day earlier than I originally estimated). Tracking will arrive via the usual route.\n\nNo further action needed on your end unless your retailer has specific delivery windows.\n\n— Karen",
+      "received_at": "2026-04-15T14:30:00Z",
+      "thread_id": "h2_t02"
+    },
+    {
+      "id": "h2_e07",
+      "subject": "Contract renewal — your master service agreement with Sequoia Logistics",
+      "sender": "Sequoia Logistics <renewals@sequoialogistics.com>",
+      "body_plain": "Hi,\n\nYour master service agreement is up for annual renewal on May 31. Attached is the proposed renewal at the same rate-card. No changes from the prior year.\n\nPlease counter-sign by May 15 to avoid any service gap. Reach out if you'd like to discuss volume tier adjustments before signing.\n\n— Sequoia Renewals Team",
+      "received_at": "2026-04-15T12:00:00Z",
+      "thread_id": null
+    },
+    {
+      "id": "h2_e08",
+      "subject": "Logistics Weekly: 5 trends shaping freight in Q3",
+      "sender": "Logistics Weekly <newsletter@logisticsweekly.com>",
+      "body_plain": "Inside this week:\n\n- Driver shortages flatten in major markets\n- Fuel surcharges trending down 4%\n- Rail-to-truck conversion at the Texas border\n\nUnsubscribe | Manage preferences",
+      "received_at": "2026-04-15T13:00:00Z",
+      "thread_id": null
+    },
+    {
+      "id": "h2_e09",
+      "subject": "Need an EOQ payables summary by Friday — high level",
+      "sender": "Janelle Owusu <janelle@yourcompany.com>",
+      "body_plain": "Hi Cobbi,\n\nFor the EOQ board pack, I need a 1-pager summarizing total payables outstanding, breakdown by aging bucket (0-30, 30-60, 60+), and your top 3 risks. By Friday EOD please.\n\nKeep it tight — Patricia just wants the headline.\n\n— Janelle, VP Ops",
+      "received_at": "2026-04-15T15:30:00Z",
+      "thread_id": null
+    }
+  ]
+}

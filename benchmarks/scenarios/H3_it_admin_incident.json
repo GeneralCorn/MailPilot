@@ -1,0 +1,79 @@
+{
+  "scenario_id": "H3",
+  "scenario_name": "IT admin incident response",
+  "difficulty": "hard",
+  "emails": [
+    {
+      "id": "h3_e01",
+      "subject": "[ALERT] Microsoft 365 admin: unusual sign-in detected — verify within 1 hour",
+      "sender": "Microsoft Security <admin-alerts@micros0ft-support.net>",
+      "body_plain": "An unusual sign-in to your Microsoft 365 admin account was detected from IP 91.103.44.18 (Bucharest, Romania).\n\nIf this was not you, secure your account by reviewing and approving the device list within the next 60 minutes. After that, your administrative account will be locked.\n\nReview now: http://micros0ft-support.net/secure?token=ax9qm4\n\n— Microsoft 365 Security",
+      "received_at": "2026-04-15T07:00:00Z",
+      "thread_id": null
+    },
+    {
+      "id": "h3_e02",
+      "subject": "[Microsoft 365 service health] SharePoint degraded performance — incident MO814092",
+      "sender": "Microsoft 365 Service Health <noreply@microsoft.com>",
+      "body_plain": "We're investigating an incident affecting SharePoint Online performance for some tenants in the Americas region.\n\nIncident ID: MO814092\nImpact: Users may experience slow file access or upload failures.\nStarted: April 15 at 06:45 UTC.\nNext update: 45 minutes.\n\nWe will continue to provide updates via the service health dashboard.\n\n— Microsoft 365 Service Health Team",
+      "received_at": "2026-04-15T07:30:00Z",
+      "thread_id": null
+    },
+    {
+      "id": "h3_e03",
+      "subject": "ServiceNow: P1 — VPN auth failures across the engineering org",
+      "sender": "ServiceNow <noreply@servicenow.com>",
+      "body_plain": "Incident INC0089412 has been raised at P1.\n\nSummary: VPN authentication failing for ~120 users in the engineering org since 06:50 PT. Multiple managers reporting it.\n\nAssigned to: IT Admin team (you).\n\nLink to ticket: https://yourcompany.service-now.com/incident/INC0089412",
+      "received_at": "2026-04-15T07:40:00Z",
+      "thread_id": null
+    },
+    {
+      "id": "h3_e04",
+      "subject": "SOC advisory: active phishing campaign impersonating Microsoft and DocuSign",
+      "sender": "Aurora SOC <soc@auroralabs.io>",
+      "body_plain": "Internal SOC advisory.\n\nWe're tracking an uptick in phishing emails impersonating Microsoft 365 admin notifications and DocuSign expiry notices, targeting our IT team specifically.\n\nKnown sender domains: micros0ft-support.net, d0cusign-secure.com, microsoft365-admin-help.app, and others.\n\nIf any of your team forwarded these to us already — thanks. Please reply if you have additional samples; we're updating the email security gateway rules tonight.\n\n— Aurora SOC",
+      "received_at": "2026-04-15T08:30:00Z",
+      "thread_id": null
+    },
+    {
+      "id": "h3_e05",
+      "subject": "Re: VPN auth — early triage notes",
+      "sender": "Hiroshi Tanaka <hiroshi@auroralabs.io>",
+      "body_plain": "Cobbi,\n\nQuick triage notes from my side on the VPN issue:\n\n1. Looks like it correlates with the certificate rotation we did Saturday night.\n2. The cert chain is missing the intermediate that the older clients still need.\n3. I think we can fix it by re-pushing the chain via Jamf.\n\nWant to jump on a call to confirm the rollout plan, or do you want to handle it solo? I have bandwidth.\n\n— Hiroshi",
+      "received_at": "2026-04-15T08:45:00Z",
+      "thread_id": null
+    },
+    {
+      "id": "h3_e06",
+      "subject": "Cisco AnyConnect renewal quote — 240 seats, 12 months",
+      "sender": "Hadley Sales <hadley@hadleyit.com>",
+      "body_plain": "Hi Cobbi,\n\nAttaching the renewal quote for Cisco AnyConnect, 240 seats, 12-month term — same pricing as last year.\n\nQuote expires May 30. Let me know if you'd like to negotiate volume tiers or extend the term for a discount.\n\n— Justin Hadley, Hadley IT Solutions",
+      "received_at": "2026-04-15T10:00:00Z",
+      "thread_id": null
+    },
+    {
+      "id": "h3_e07",
+      "subject": "URGENT — DocuSign agreement expires soon, sign now",
+      "sender": "DocuSign Notifications <dse@d0cusign-secure.com>",
+      "body_plain": "A document is awaiting your signature and will expire in 6 hours.\n\nDocument: Microsoft Enterprise Agreement Renewal\nFrom: ms-renewals\nExpires: today 4:00 PM\n\nReview and sign: http://d0cusign-secure.com/sign?id=B33122X4\n\n— DocuSign",
+      "received_at": "2026-04-15T11:30:00Z",
+      "thread_id": null
+    },
+    {
+      "id": "h3_e08",
+      "subject": "Quarterly access review — confirm or revoke admin grants",
+      "sender": "Aurora Compliance <compliance@auroralabs.io>",
+      "body_plain": "Hi,\n\nIt's time for your Q2 quarterly access review. You have 14 active admin role grants to review:\n\n- 6 in AWS\n- 5 in Microsoft 365\n- 3 in GitHub Enterprise\n\nReview each grant via the compliance portal and confirm or revoke. Deadline: April 25.\n\n— Aurora Compliance",
+      "received_at": "2026-04-15T13:00:00Z",
+      "thread_id": null
+    },
+    {
+      "id": "h3_e09",
+      "subject": "[r/sysadmin digest] Top posts this week",
+      "sender": "Reddit <noreply@reddit.com>",
+      "body_plain": "Top posts in r/sysadmin this week:\n\n- 'My CEO insists on using SMB1, send help'\n- 'How are y'all handling Windows Server 2012 ESU'\n- 'BitLocker recovery stories'\n\nUnsubscribe from digests in your Reddit preferences.",
+      "received_at": "2026-04-15T15:00:00Z",
+      "thread_id": null
+    }
+  ]
+}

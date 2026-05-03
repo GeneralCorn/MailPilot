@@ -1,0 +1,21 @@
+{
+  "scenario_id": "H1",
+  "per_email": [
+    { "id": "h1_e01", "category": "risk",      "priority": "high",   "action": "escalate",    "needs_review": true  },
+    { "id": "h1_e02", "category": "work",      "priority": "high",   "action": "calendar",    "needs_review": false },
+    { "id": "h1_e03", "category": "work",      "priority": "high",   "action": "reply_draft", "needs_review": false },
+    { "id": "h1_e04", "category": "risk",      "priority": "high",   "action": "escalate",    "needs_review": true  },
+    { "id": "h1_e05", "category": "personal",  "priority": "low",    "action": "reply_draft", "needs_review": false },
+    { "id": "h1_e06", "category": "billing",   "priority": "medium", "action": "flag",        "needs_review": false },
+    { "id": "h1_e07", "category": "work",      "priority": "high",   "action": "reply_draft", "needs_review": false },
+    { "id": "h1_e08", "category": "work",      "priority": "low",    "action": "label",       "needs_review": false },
+    { "id": "h1_e09", "category": "work",      "priority": "low",    "action": "no_action",   "needs_review": false }
+  ],
+  "expected_tool_calls": [
+    { "id": "h1_e02", "tool": "calendar.create_event", "required_args": ["title", "start", "end"] },
+    { "id": "h1_e03", "tool": "reply_draft.create",   "required_args": ["to", "body"] },
+    { "id": "h1_e05", "tool": "reply_draft.create",   "required_args": ["to", "body"] },
+    { "id": "h1_e07", "tool": "reply_draft.create",   "required_args": ["to", "body"] }
+  ],
+  "notes": "Two distinct risk vectors: (1) gift card scam impersonating exec via personal Gmail, (2) DocuSign lookalike (d0cusign-secure.com). The legitimate calendar invite from Patricia's real corporate address must NOT be confused with the gift-card spoof from Patricia's gmail.com address."
+}

@@ -1,0 +1,63 @@
+{
+  "scenario_id": "M3",
+  "scenario_name": "HR mid-cycle review",
+  "difficulty": "medium",
+  "emails": [
+    {
+      "id": "m3_e01",
+      "subject": "Exclusive offer — enroll in your 2026 benefits before April 30!",
+      "sender": "Auro Benefits <benefits@auroralabs.io>",
+      "body_plain": "Open enrollment is here.\n\nDon't miss out on this year's exclusive benefits offerings — including expanded mental health coverage, FSA matching, and a new commuter benefit.\n\nEnroll by April 30 to lock in 2026 rates. After that date, your elections roll over but you cannot make changes until next year's window.\n\nEnroll now in Rippling | Benefits guide PDF\n\n— Auro People Ops",
+      "received_at": "2026-04-15T07:30:00Z",
+      "thread_id": null
+    },
+    {
+      "id": "m3_e02",
+      "subject": "FW: serious concerns from a member of my team",
+      "sender": "Marcus Liang <marcus.liang@auroralabs.io>",
+      "body_plain": "Hi Sarah,\n\nForwarding the attached email from one of my engineers. They're alleging behavior from a senior IC on the platform team that may rise to the level of harassment under our policy. I haven't responded yet — wanted you to handle this directly.\n\nThe complainant has asked for confidentiality.\n\nLet me know how you'd like to proceed and what I should and shouldn't say to the team in the meantime.\n\n— Marcus",
+      "received_at": "2026-04-15T08:15:00Z",
+      "thread_id": null
+    },
+    {
+      "id": "m3_e03",
+      "subject": "Calibration meeting — Q2 mid-cycle reviews, Wed 4/23 1-3pm",
+      "sender": "Priya Joshi <priya.joshi@auroralabs.io>",
+      "body_plain": "Hi Sarah,\n\nLet's get all the people managers in a room for the mid-cycle calibration. Booked the Cypress conference room for Wednesday April 23, 1pm-3pm.\n\nAgenda:\n- Calibrate ratings across teams\n- Discuss 3 borderline cases (names redacted in deck)\n- Promo recommendations for Q3\n\nManagers will pre-read the calibration deck Tuesday. Add to your calendar.\n\n— Priya, VP People",
+      "received_at": "2026-04-15T09:00:00Z",
+      "thread_id": null
+    },
+    {
+      "id": "m3_e04",
+      "subject": "[Demo] Lattice + your HRIS = 10x faster reviews",
+      "sender": "Lattice Sales <growth@lattice.com>",
+      "body_plain": "Hi Sarah,\n\nSaw you're using Rippling — Lattice integrates natively and most HR teams cut review-cycle prep time by 60%. Want a 20-min demo this week?\n\nUnsubscribe",
+      "received_at": "2026-04-15T10:00:00Z",
+      "thread_id": null
+    },
+    {
+      "id": "m3_e05",
+      "subject": "BambooHR Spring Conference — early bird pricing ends Monday",
+      "sender": "BambooHR Events <events@bamboohr.com>",
+      "body_plain": "Join 4,000+ HR leaders at our annual conference, May 18-20 in Austin TX.\n\nEarly bird $799 ends Monday. Speakers include CHROs from Atlassian, Datadog, Notion.\n\nRegister | View agenda",
+      "received_at": "2026-04-15T11:00:00Z",
+      "thread_id": null
+    },
+    {
+      "id": "m3_e06",
+      "subject": "Payroll discrepancy: under-withholding flagged for 4 employees",
+      "sender": "Rippling Payroll <payroll-alerts@rippling.com>",
+      "body_plain": "Our system flagged 4 employees with potential under-withholding for federal taxes in the April 15 pay run.\n\nEmployee IDs: 21084, 21339, 21902, 22011\n\nThis may be due to recent W-4 updates that did not propagate. Please review before the next pay cycle (April 30) to avoid year-end true-up issues for these employees.\n\nView full report in the Rippling dashboard.",
+      "received_at": "2026-04-15T13:30:00Z",
+      "thread_id": null
+    },
+    {
+      "id": "m3_e07",
+      "subject": "Thank you for the offsite",
+      "sender": "Whole Team <eng-team@auroralabs.io>",
+      "body_plain": "Sarah —\n\nJust wanted to say from the whole eng team: the offsite last week was incredible. The retreat venue, the activities, the way you ran the open Q&A on the company strategy — best one we've had. Many of us said it's the most we've felt connected to the company since joining.\n\nThank you for putting it together.\n\nEng team",
+      "received_at": "2026-04-15T16:30:00Z",
+      "thread_id": null
+    }
+  ]
+}

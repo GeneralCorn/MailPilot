@@ -1,0 +1,19 @@
+{
+  "scenario_id": "H2",
+  "per_email": [
+    { "id": "h2_e01", "category": "risk",      "priority": "high",   "action": "escalate",    "needs_review": true  },
+    { "id": "h2_e02", "category": "billing",   "priority": "high",   "action": "flag",        "needs_review": false },
+    { "id": "h2_e03", "category": "billing",   "priority": "high",   "action": "flag",        "needs_review": false },
+    { "id": "h2_e04", "category": "billing",   "priority": "high",   "action": "reply_draft", "needs_review": false },
+    { "id": "h2_e05", "category": "work",      "priority": "medium", "action": "flag",        "needs_review": false },
+    { "id": "h2_e06", "category": "work",      "priority": "medium", "action": "no_action",   "needs_review": false },
+    { "id": "h2_e07", "category": "work",      "priority": "medium", "action": "label",       "needs_review": false },
+    { "id": "h2_e08", "category": "marketing", "priority": "low",    "action": "archive",     "needs_review": false },
+    { "id": "h2_e09", "category": "work",      "priority": "high",   "action": "reply_draft", "needs_review": false }
+  ],
+  "expected_tool_calls": [
+    { "id": "h2_e04", "tool": "reply_draft.create", "required_args": ["to", "body"] },
+    { "id": "h2_e09", "tool": "reply_draft.create", "required_args": ["to", "body"] }
+  ],
+  "notes": "Phishing/legit near-duplicate (h2_e01 vs h2_e02): only differ in domain (.support TLD vs stripe.com) and invoice number. Pinegrove thread requires escalation: 1st email is flag, 2nd email same thread bumps to reply_draft because of clear deadline. Supply chain thread does the inverse: 1st flags the issue, 2nd resolves it (no_action)."
+}

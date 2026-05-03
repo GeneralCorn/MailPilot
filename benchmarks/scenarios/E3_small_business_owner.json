@@ -1,0 +1,47 @@
+{
+  "scenario_id": "E3",
+  "scenario_name": "Small business owner average day",
+  "difficulty": "easy",
+  "emails": [
+    {
+      "id": "e3_e01",
+      "subject": "Question about your hours next Saturday",
+      "sender": "Marcus Chen <m.chen.dds@gmail.com>",
+      "body_plain": "Hi,\n\nI'm hoping to bring my daughter in for a haircut on Saturday April 19. Are you open and do you take walk-ins or do I need to book?\n\nThanks,\nMarcus",
+      "received_at": "2026-04-15T08:30:00Z",
+      "thread_id": null
+    },
+    {
+      "id": "e3_e02",
+      "subject": "Your Square statement is ready — March",
+      "sender": "Square <statements@squareup.com>",
+      "body_plain": "Your March statement is now available. Total processed: $14,238.10. Total fees: $369.18.\n\nView statement on the Square dashboard.\n\nIf any of these transactions look wrong or you didn't authorize them, contact us right away.",
+      "received_at": "2026-04-15T09:00:00Z",
+      "thread_id": null
+    },
+    {
+      "id": "e3_e03",
+      "subject": "Re: damaged products from last shipment",
+      "sender": "Linda from BeautySupply Co <linda@beautysupplyco.com>",
+      "body_plain": "Hi Sam,\n\nFollowing up on the email I sent Monday — three of the bottles arrived broken in the last shipment (invoice #2284). I attached photos. Can we either get replacements or a credit on the next order?\n\nLet me know how you'd like to handle it.\n\nThanks,\nLinda",
+      "received_at": "2026-04-15T10:00:00Z",
+      "thread_id": null
+    },
+    {
+      "id": "e3_e04",
+      "subject": "Your Yelp ad campaign performance — last 7 days",
+      "sender": "Yelp Ads <ads-team@yelp.com>",
+      "body_plain": "This week your ad got 1,284 impressions and 47 clicks (3.7% CTR).\n\nTop search terms driving traffic: hair salon downtown, balayage, color correction.\n\nLog in to optimize your campaign or adjust your budget.",
+      "received_at": "2026-04-15T11:30:00Z",
+      "thread_id": null
+    },
+    {
+      "id": "e3_e05",
+      "subject": "Thank you!",
+      "sender": "Jenny Park <jpark.92@yahoo.com>",
+      "body_plain": "Just wanted to say thank you for fitting me in last minute yesterday. You guys are lifesavers. Already booked again for May.\n\n- Jenny",
+      "received_at": "2026-04-15T15:20:00Z",
+      "thread_id": null
+    }
+  ]
+}

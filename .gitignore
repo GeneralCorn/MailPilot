@@ -213,3 +213,11 @@ marimo/_lsp/
 __marimo__/
 
 *.json
+
+# benchmark scenarios + ground truth are tracked; results are regeneratable
+!benchmarks/scenarios/*.json
+!benchmarks/ground_truth/*.json
+benchmarks/results/
+
+# macOS
+.DS_Store
