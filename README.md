@@ -57,17 +57,17 @@ Pre-flight (validates the 10 ground-truth files):
 Run all four agents into one shared run directory:
 
 ```bash
-.venv/bin/python benchmarks/run_benchmark.py --agent rule       --difficulty all --trials 3 --run-id paper
-.venv/bin/python benchmarks/run_benchmark.py --agent single     --difficulty all --trials 3 --run-id paper --max-cost-usd 5
-.venv/bin/python benchmarks/run_benchmark.py --agent no_eval    --difficulty all --trials 3 --run-id paper --max-cost-usd 5
-.venv/bin/python benchmarks/run_benchmark.py --agent mailpilot  --difficulty all --trials 3 --run-id paper --max-cost-usd 10
+.venv/bin/python benchmarks/run_benchmark.py --agent rule       --difficulty all --trials 3 --run-id eval1
+.venv/bin/python benchmarks/run_benchmark.py --agent single     --difficulty all --trials 3 --run-id eval1 --max-cost-usd 5
+.venv/bin/python benchmarks/run_benchmark.py --agent no_eval    --difficulty all --trials 3 --run-id eval1 --max-cost-usd 5
+.venv/bin/python benchmarks/run_benchmark.py --agent mailpilot  --difficulty all --trials 3 --run-id eval1 --max-cost-usd 10
 ```
 
 Aggregate the trial JSONs into the report:
 
 ```bash
-.venv/bin/python -m benchmarks.scoring.aggregate benchmarks/results/paper
-cat benchmarks/results/paper/report.md
+.venv/bin/python -m benchmarks.scoring.aggregate benchmarks/results/eval1
+cat benchmarks/results/eval1/report.md
 ```
 
 Per-trial JSONs under `benchmarks/results/<run-id>/<agent>/<scenario>/trial_K.json` carry full provenance: `model`, `git_commit`, `timestamp`, `temperature`, `usage` (calls / input_tokens / output_tokens / estimated_cost_usd).
