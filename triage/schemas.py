@@ -6,8 +6,6 @@ from typing import Any
 from pydantic import BaseModel, Field
 
 
-# ── Enums ──
-
 class Category(str, Enum):
     MARKETING = "marketing"
     PERSONAL = "personal"
@@ -42,8 +40,6 @@ class Action(str, Enum):
     SEND_EMAIL = "send_email"
     NO_ACTION = "no_action"
 
-
-# ── Pipeline Schemas ──
 
 class Message(BaseModel):
     """Email metadata passed into LLM context windows."""

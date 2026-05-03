@@ -1,4 +1,3 @@
-"""Run benchmark scenarios through the live MailPilot pipeline and dump artifacts."""
 from __future__ import annotations
 
 import argparse
@@ -16,7 +15,7 @@ REPO_ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(REPO_ROOT))
 os.environ.setdefault("DJANGO_SETTINGS_MODULE", "mailpilot.settings")
 
-import django  # noqa: E402
+import django
 
 django.setup()
 
@@ -53,7 +52,6 @@ GT_DIR = REPO_ROOT / "benchmarks" / "ground_truth"
 RESULTS_DIR = REPO_ROOT / "benchmarks" / "results"
 
 
-# ── Loading ─────────────────────────────────────────────────────────────────
 
 def load_scenario(scenario_id: str) -> dict:
     matches = list(SCEN_DIR.glob(f"{scenario_id}_*.json"))
@@ -81,8 +79,6 @@ def select_scenarios(difficulty: str, scenario: str | None) -> list[str]:
         raise ValueError(f"Unknown difficulty: {difficulty}")
     return by_difficulty[difficulty]
 
-
-# ── State management ────────────────────────────────────────────────────────
 
 def wipe_email_state(email_ids: list[str]) -> None:
     """Delete prior pipeline state for these email_ids so reruns are clean.

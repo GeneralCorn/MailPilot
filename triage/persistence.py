@@ -234,8 +234,6 @@ def unfinished_runs() -> list[str]:
     return [r[0] for r in rows]
 
 
-# ── email_state ──
-
 def _row_to_state(row: tuple) -> dict[str, Any]:
     cols = ("email_id", "category", "priority", "priority_rank", "status", "flagged",
             "folder", "summary", "draft_reply", "calendar_event", "escalations",
