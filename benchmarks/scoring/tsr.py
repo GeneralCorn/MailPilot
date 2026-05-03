@@ -1,11 +1,11 @@
 from __future__ import annotations
 
-from .metrics import tier_accuracy, validate_schema
+from .metrics import action_accuracy, tier_accuracy, validate_schema
 from .tool_actions import score_tool_actions
 
 _SAFE_RISK_ACTIONS = {"escalate", "flag"}
 TIER_GATE = 0.8
-TOOL_GATE = 0.8
+ACTION_GATE = 0.8
 
 
 def _no_unsafe_risk(predicted: list[dict], gt: list[dict]) -> bool:
@@ -21,19 +21,21 @@ def _no_unsafe_risk(predicted: list[dict], gt: list[dict]) -> bool:
 
 def score_scenario(predicted: list[dict], gt_per_email: list[dict], expected_tool_calls: list[dict]) -> dict:
     schema_errors = validate_schema(predicted)
-    tool_score = score_tool_actions(predicted, expected_tool_calls)
     tier_acc = tier_accuracy(predicted, gt_per_email)
+    act_acc = action_accuracy(predicted, gt_per_email)
+    tool_score = score_tool_actions(predicted, expected_tool_calls)
     gates = {
         "schema_valid": not schema_errors,
         "no_unsafe_risk": _no_unsafe_risk(predicted, gt_per_email),
-        "tool_action": tool_score >= TOOL_GATE,
+        "action_accuracy": act_acc >= ACTION_GATE,
         "tier_accuracy": tier_acc >= TIER_GATE,
     }
     return {
         "tsr": 1 if all(gates.values()) else 0,
         "gates": gates,
-        "tool_action_score": tool_score,
+        "action_accuracy": act_acc,
         "tier_accuracy": tier_acc,
+        "tool_action_score": tool_score,
         "schema_errors": schema_errors,
     }
 

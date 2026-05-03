@@ -23,7 +23,18 @@ def test_perfect_run_tsr_1():
     assert s["tsr"] == 1
     assert all(s["gates"].values())
     assert s["tier_accuracy"] == 1.0
+    assert s["action_accuracy"] == 1.0
     assert s["tool_action_score"] == 1.0
+
+
+def test_action_field_drift_fails_gate_3():
+    pred = _perfect_run(_E1_GT)
+    # Flip 2 of 5 actions: 3/5 = 0.6 < 0.8 → gate fails
+    pred[0] = {**pred[0], "action": "no_action"}
+    pred[1] = {**pred[1], "action": "no_action"}
+    s = score_scenario(pred, _E1_GT, expected_tool_calls=[])
+    assert s["gates"]["action_accuracy"] is False
+    assert s["tsr"] == 0
 
 
 def test_unsafe_risk_action_fails_gate_2():

@@ -118,6 +118,15 @@ def run_pipeline(
                     c.model_dump(mode="json") if hasattr(c, "model_dump") else dict(c)
                     for c in proposed
                 ]
+            # persist worker-executed tools so the benchmark scorer can see them
+            sub_results = s.sub_action_results.get(_eid) or []
+            executed = [
+                {"tool": r.tool.value, "success": r.success, "message": r.message, "data": r.data}
+                for r in sub_results
+                if r.tool.value not in ("summarize", "no_action")
+            ]
+            if executed:
+                fields["external_actions"] = executed
             persistence.update_email_state(_eid, **fields)
             persistence.mark_processed(_eid, run_id, status)
 

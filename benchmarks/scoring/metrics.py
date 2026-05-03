@@ -65,3 +65,10 @@ def tier_accuracy(predicted: list[dict], gt: list[dict]) -> float:
     if not pairs:
         return 0.0
     return sum(1 for t, p in pairs if t == p) / len(pairs)
+
+
+def action_accuracy(predicted: list[dict], gt: list[dict]) -> float:
+    pairs = _aligned_pairs(predicted, gt, "action")
+    if not pairs:
+        return 0.0
+    return sum(1 for t, p in pairs if t == p) / len(pairs)
