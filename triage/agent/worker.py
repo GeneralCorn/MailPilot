@@ -42,12 +42,23 @@ _SYSTEM = (
     "Guidance per category — every email needs at least ONE actionable tool besides summarize:\n"
     "- Marketing: `archive` (folder='promotions'). Newsletters and digests count as marketing.\n"
     "- Risk: ALWAYS `summarize` + `escalate`. Never auto-reply or auto-archive.\n"
-    "- Billing: ALWAYS `summarize` + `flag` so the user reviews. If the email asks a question\n"
-    "  or chases an overdue item, ALSO `reply_draft` with a one-paragraph response.\n"
-    "- Work: ALWAYS `summarize`. Then pick:\n"
-    "    * `reply_draft` when the email explicitly asks for a response, decision, or summary;\n"
-    "    * `calendar` (+ `send_email` kind='rsvp') for meeting invites with RSVP language;\n"
-    "    * `label` for informational work emails (renewals, status updates, FYI).\n"
+    "- Billing: ALWAYS `summarize` + `flag` so the user reviews.\n"
+    "    * `reply_draft` ONLY when the email asks a specific factual question with a clear\n"
+    "      answer (e.g. 'what's your billing address?'). For first-touch overdue chases or\n"
+    "      payment alerts, just flag — let the user decide whether to respond.\n"
+    "- Work: ALWAYS `summarize`. Then pick exactly one:\n"
+    "    * `calendar` (+ `send_email` kind='rsvp') for NEW meeting invites with RSVP language.\n"
+    "      RSVP CONFIRMATION receipts (already-confirmed) → `flag`, never propose a new event.\n"
+    "    * `reply_draft` when a colleague asks a direct, time-bound question that has a\n"
+    "      factual answer (e.g. 'send the Q3 numbers by Friday'), OR when a `Re:` thread\n"
+    "      escalation includes a hard deadline asking the user to confirm/decide today.\n"
+    "      NOT for routine status updates or heads-up alerts.\n"
+    "    * `flag` for status alerts / heads-up messages where the user should be aware but\n"
+    "      no automated response is appropriate.\n"
+    "    * `label` for purely informational FYI (auto-renewals, contract notices, weekly\n"
+    "      reports).\n"
+    "    * `no_action` for thread follow-ups that just close a previous discussion (the\n"
+    "      previous email already triggered the right action).\n"
     "- Personal: prefer `reply_draft` over auto-send unless an explicit RSVP is requested.\n"
     "- `calendar` and `send_email` are gated behind a human approval UI — never pre-filter\n"
     "  them. The user decides; just propose them when content suggests they belong.\n"
@@ -250,12 +261,13 @@ def _fewshot_messages() -> list[dict]:
             {"type": "tool_result", "tool_use_id": "fs3_b", "content": "Escalated to security"},
         ]},
 
-        # billing overdue → summarize + flag + reply_draft
+        # billing overdue first-touch → summarize + flag (NO reply yet)
         {"role": "user", "content": (
             "Subject: OVERDUE: Invoice #2042 — please confirm payment date\n"
             "Sender: ar@vendor.com\n"
             "Category: billing\n"
-            "Required: `summarize` + `flag`. Add `reply_draft` because the email asks a question.\n"
+            "Required: `summarize` + `flag`. The reply requires a payment-date decision the\n"
+            "user must make, so do NOT draft a reply yet.\n"
             "Body: Invoice #2042 is now 18 days past due. Can you confirm when payment will be sent?"
         )},
         {"role": "assistant", "content": [
@@ -263,13 +275,50 @@ def _fewshot_messages() -> list[dict]:
              "input": {"summary": "Vendor chasing 18-day overdue invoice #2042 and asking for a payment date."}},
             {"type": "tool_use", "id": "fs4_b", "name": "flag",
              "input": {"flag": True}},
-            {"type": "tool_use", "id": "fs4_c", "name": "reply_draft",
-             "input": {"body": "Thanks for the reminder — I'll confirm a payment date by end of week."}},
         ]},
         {"role": "user", "content": [
             {"type": "tool_result", "tool_use_id": "fs4_a", "content": "Summary saved"},
             {"type": "tool_result", "tool_use_id": "fs4_b", "content": "Flagged"},
-            {"type": "tool_result", "tool_use_id": "fs4_c", "content": "Draft saved"},
+        ]},
+
+        # RSVP confirmation receipt → summarize + flag (no new calendar)
+        {"role": "user", "content": (
+            "Subject: Your RSVP for the spring career fair is confirmed\n"
+            "Sender: events@university.edu\n"
+            "Category: work\n"
+            "Required: `summarize` + `flag`. This is a confirmation receipt — the user already\n"
+            "RSVP'd, so do NOT propose a new calendar event.\n"
+            "Body: Your RSVP for April 25, 1pm-5pm is confirmed. Bring 10 resumes."
+        )},
+        {"role": "assistant", "content": [
+            {"type": "tool_use", "id": "fs_rsvp_a", "name": "summarize",
+             "input": {"summary": "RSVP confirmed for April 25 career fair, 1-5pm; bring 10 resumes."}},
+            {"type": "tool_use", "id": "fs_rsvp_b", "name": "flag",
+             "input": {"flag": True}},
+        ]},
+        {"role": "user", "content": [
+            {"type": "tool_result", "tool_use_id": "fs_rsvp_a", "content": "Summary saved"},
+            {"type": "tool_result", "tool_use_id": "fs_rsvp_b", "content": "Flagged"},
+        ]},
+
+        # thread follow-up that closes the discussion → summarize + no_action
+        {"role": "user", "content": (
+            "Subject: Re: Heads up — supply chain delay on SKU-7790\n"
+            "Sender: ops@vendor.com\n"
+            "Category: work\n"
+            "Required: `summarize` + `no_action`. Thread follow-up that resolves the issue —\n"
+            "the prior email already triggered the right action.\n"
+            "Body: Update: shipment cleared customs this morning, will arrive on schedule."
+        )},
+        {"role": "assistant", "content": [
+            {"type": "tool_use", "id": "fs_thread_a", "name": "summarize",
+             "input": {"summary": "Supply chain delay resolved: shipment cleared customs, on schedule."}},
+            {"type": "tool_use", "id": "fs_thread_b", "name": "no_action",
+             "input": {"reason": "Thread resolved by upstream message; nothing to do."}},
+        ]},
+        {"role": "user", "content": [
+            {"type": "tool_result", "tool_use_id": "fs_thread_a", "content": "Summary saved"},
+            {"type": "tool_result", "tool_use_id": "fs_thread_b", "content": "No action recorded"},
         ]},
 
         # work informational (contract renewal) → summarize + label
@@ -298,16 +347,20 @@ def _fewshot_messages() -> list[dict]:
 _CATEGORY_REQUIREMENT = {
     Category.MARKETING: (
         "Required: call `archive` (folder='promotions'). Newsletters, digests, and promos all "
-        "go through archive. Calling only `summarize` (or nothing) is wrong."
+        "go through archive."
     ),
     Category.BILLING: (
-        "Required: `summarize` + `flag`. Add `reply_draft` if the email asks a question or "
-        "chases an overdue item."
+        "Required: `summarize` + `flag`. Add `reply_draft` ONLY for a specific factual "
+        "question with a clear answer; first-touch overdue chases or payment FYIs just `flag`."
     ),
     Category.WORK: (
-        "Required: `summarize` PLUS one of: `reply_draft` (the email asks for a reply / "
-        "decision / summary), `calendar` (+ `send_email` kind='rsvp' if RSVP language), "
-        "`label` (informational FYI/renewal/status)."
+        "Required: `summarize` + exactly one of:\n"
+        "  - `calendar` (+ `send_email` kind='rsvp') ONLY for NEW meeting invites needing RSVP;\n"
+        "  - `flag` for RSVP confirmations / heads-up alerts / status updates;\n"
+        "  - `reply_draft` for direct factual asks (e.g. 'send the Q3 numbers by Friday') OR\n"
+        "    `Re:` thread escalations with a hard deadline asking the user to confirm/decide;\n"
+        "  - `label` for informational FYI (auto-renewals, contract notices, weekly reports);\n"
+        "  - `no_action` for thread follow-ups closing a prior discussion."
     ),
     Category.RISK: (
         "Required: `summarize` + `escalate` (target='security'). Never archive or auto-reply."
