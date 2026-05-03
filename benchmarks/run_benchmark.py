@@ -26,9 +26,9 @@ from triage.pipeline import run_pipeline  # noqa: E402
 from triage.schemas import Message  # noqa: E402
 
 
-# Approximate published per-1M-token pricing in USD.
+# Approximate published per-1M-token pricing in USD (cache-miss input, output).
 _PRICES_PER_MTOK: dict[str, tuple[float, float]] = {
-    "deepseek-chat": (0.27, 1.10),
+    "deepseek-chat": (0.14, 0.28),
     "claude-sonnet-4-6": (3.00, 15.00),
 }
 
