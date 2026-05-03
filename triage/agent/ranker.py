@@ -18,8 +18,8 @@ _SYSTEM = (
     "Guidance:\n"
     "- Urgency cues (deadlines, RSVPs, time-sensitive asks) raise priority.\n"
     "- Sender role and category matter: work > billing > personal > marketing.\n"
-    "- Emails classified as 'risk' get low priority — they will be flagged for\n"
-    "  human review, not acted on automatically, so they should not block the queue.\n"
+    "- Emails classified as 'risk' get HIGH priority — they need human review fast,\n"
+    "  so they must surface to the top of the queue.\n"
     "- Keep scores spread across the [0, 1] range so the queue is well-ordered."
 )
 
@@ -93,9 +93,9 @@ _FEWSHOT_INPUT_2 = json.dumps(
 
 _FEWSHOT_OUTPUT_2 = (
     "rank_emails(ranked=[\n"
-    "  {email_id: 'a', score: 0.7, priority: 'high', reason: 'work status, not deadline-bound'},\n"
-    "  {email_id: 'c', score: 0.35, priority: 'medium', reason: 'casual social, no time pressure'},\n"
-    "  {email_id: 'b', score: 0.1, priority: 'low', reason: 'phishing — flagged for review'}\n"
+    "  {email_id: 'b', score: 0.95, priority: 'high', reason: 'phishing — needs human review fast'},\n"
+    "  {email_id: 'a', score: 0.6, priority: 'medium', reason: 'work status, not deadline-bound'},\n"
+    "  {email_id: 'c', score: 0.3, priority: 'low', reason: 'casual social, no time pressure'}\n"
     "])"
 )
 
