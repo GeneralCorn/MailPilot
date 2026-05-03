@@ -117,7 +117,7 @@
       <div class="card-snippet">{{ email.snippet|truncatechars:80 }}</div>
       <div class="card-meta">
         <span class="badge cat-{{ email.category|default:'unclassified' }}">{{ email.category|default:"unclassified" }}</span>
-        {% if email.priority == "urgent" %}<span class="badge pri-critical">urgent</span>{% elif email.priority == "important" %}<span class="badge pri-high">important</span>{% endif %}
+        {% if email.priority == "high" %}<span class="badge pri-critical">high</span>{% elif email.priority == "medium" %}<span class="badge pri-high">medium</span>{% endif %}
       </div>
     </div>
     {% empty %}
@@ -136,7 +136,7 @@
       </div>
       <div class="preview-badges">
         <span class="badge cat-{{ selected.category|default:'unclassified' }}">{{ selected.category|default:"unclassified" }}</span>
-        {% if selected.priority == "urgent" %}<span class="badge pri-critical">urgent</span>{% elif selected.priority == "important" %}<span class="badge pri-high">important</span>{% endif %}
+        {% if selected.priority == "high" %}<span class="badge pri-critical">high</span>{% elif selected.priority == "medium" %}<span class="badge pri-high">medium</span>{% endif %}
       </div>
     </div>
     {% if selected.proposed_actions %}

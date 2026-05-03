@@ -46,7 +46,7 @@ def _fake_rank(state):
     ordered = sorted(state.messages, key=lambda m: m.id)
     state.priority_queue = [(m.id, 1.0 - i * 0.3) for i, m in enumerate(ordered)]
     for m in ordered:
-        state.priorities[m.id] = Priority.NORMAL
+        state.priorities[m.id] = Priority.MEDIUM
 
 
 def _fake_work(email, state, runtime=None):

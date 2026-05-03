@@ -18,11 +18,9 @@ class Category(str, Enum):
 
 
 class Priority(str, Enum):
-    URGENT = "urgent"
-    IMPORTANT = "important"
-    NORMAL = "normal"
+    HIGH = "high"
+    MEDIUM = "medium"
     LOW = "low"
-    MINIMAL = "minimal"
 
 
 class Status(str, Enum):

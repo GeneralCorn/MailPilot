@@ -20,9 +20,9 @@ def test_rank_writes_priority_queue_sorted_desc():
     factory = fake_anthropic_with_tool_calls([
         [("rank_emails", {
             "ranked": [
-                {"email_id": "a", "score": 0.9, "priority": "urgent", "reason": "x"},
-                {"email_id": "b", "score": 0.1, "priority": "minimal", "reason": "x"},
-                {"email_id": "c", "score": 0.5, "priority": "normal", "reason": "x"},
+                {"email_id": "a", "score": 0.9, "priority": "high", "reason": "x"},
+                {"email_id": "b", "score": 0.1, "priority": "low", "reason": "x"},
+                {"email_id": "c", "score": 0.5, "priority": "medium", "reason": "x"},
             ]
         })]
     ])
@@ -30,9 +30,9 @@ def test_rank_writes_priority_queue_sorted_desc():
         ranker_mod.rank(state)
 
     assert state.priority_queue == [("a", 0.9), ("c", 0.5), ("b", 0.1)]
-    assert state.priorities["a"] == Priority.URGENT
-    assert state.priorities["c"] == Priority.NORMAL
-    assert state.priorities["b"] == Priority.MINIMAL
+    assert state.priorities["a"] == Priority.HIGH
+    assert state.priorities["c"] == Priority.MEDIUM
+    assert state.priorities["b"] == Priority.LOW
 
 
 def test_rank_falls_back_on_api_error():
@@ -46,7 +46,7 @@ def test_rank_falls_back_on_api_error():
         ranker_mod.rank(state)
 
     assert [eid for eid, _ in state.priority_queue] == ["b", "c", "a"]
-    assert all(state.priorities[eid] == Priority.NORMAL for eid in ("a", "b", "c"))
+    assert all(state.priorities[eid] == Priority.MEDIUM for eid in ("a", "b", "c"))
     assert set(state.needs_review) == {"a", "b", "c"}
 
 
@@ -58,8 +58,8 @@ def test_rank_falls_back_on_malformed_tool_input():
     ])
     with patch.object(ranker_mod.anthropic, "Anthropic", factory):
         ranker_mod.rank(state)
-    # fallback assigns NORMAL to all and pushes to needs_review
-    assert state.priorities["a"] == Priority.NORMAL
+    # fallback assigns MEDIUM to all and pushes to needs_review
+    assert state.priorities["a"] == Priority.MEDIUM
 
 
 def test_rank_clamps_score_out_of_range():
@@ -67,8 +67,8 @@ def test_rank_clamps_score_out_of_range():
     factory = fake_anthropic_with_tool_calls([
         [("rank_emails", {
             "ranked": [
-                {"email_id": "a", "score": 1.5, "priority": "urgent", "reason": "x"},
-                {"email_id": "b", "score": -0.2, "priority": "minimal", "reason": "x"},
+                {"email_id": "a", "score": 1.5, "priority": "high", "reason": "x"},
+                {"email_id": "b", "score": -0.2, "priority": "low", "reason": "x"},
             ]
         })]
     ])
@@ -83,7 +83,7 @@ def test_rank_caps_at_max_batch_and_appends_overflow_tail():
     msgs = [_msg(f"e{i}") for i in range(ranker_mod.MAX_BATCH + 5)]
     state = State(messages=msgs)
     ranked = [
-        {"email_id": f"e{i}", "score": 0.5, "priority": "normal", "reason": "x"}
+        {"email_id": f"e{i}", "score": 0.5, "priority": "medium", "reason": "x"}
         for i in range(ranker_mod.MAX_BATCH)
     ]
     factory = fake_anthropic_with_tool_calls([
@@ -96,7 +96,7 @@ def test_rank_caps_at_max_batch_and_appends_overflow_tail():
     assert [eid for eid, _ in tail] == [f"e{i}" for i in range(ranker_mod.MAX_BATCH, ranker_mod.MAX_BATCH + 5)]
     assert all(score == 0.0 for _, score in tail)
     for i in range(ranker_mod.MAX_BATCH, ranker_mod.MAX_BATCH + 5):
-        assert state.priorities[f"e{i}"] == Priority.NORMAL
+        assert state.priorities[f"e{i}"] == Priority.MEDIUM
 
 
 def test_rank_handles_empty_state_as_noop():
@@ -115,5 +115,5 @@ def test_rank_short_circuits_for_single_email_without_llm():
     with patch.object(ranker_mod.anthropic, "Anthropic", boom):
         ranker_mod.rank(state)
 
-    assert state.priorities["solo"] == Priority.NORMAL
+    assert state.priorities["solo"] == Priority.MEDIUM
     assert state.priority_queue == [("solo", 0.5)]
