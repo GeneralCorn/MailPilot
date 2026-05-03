@@ -9,7 +9,6 @@ scenarios/        E1–H3 input emails (10 files)
 ground_truth/     E1–H3 expected category/priority/action/needs_review + tool calls
 baselines/        rule_based, single_prompt, no_evaluator, mailpilot_full
 scoring/          tsr, metrics, tool_actions, errors, aggregate, validate_gt
-human_eval/       template csv, make_csv, irr (Cohen's κ)
 results/          run output (gitignored)
 run_benchmark.py  CLI entry
 ```
@@ -34,22 +33,6 @@ Each scenario is scored against four gates. The scenario's TSR is `passed_gates 
 `scoring/tool_actions.py` separately scores GT's `expected_tool_calls` (tool name + required args, with mapping between GT names like `calendar.create_event` and worker output names like `calendar`). This is reported alongside but not a gate.
 
 `scoring/errors.py` breaks failures into 5 types (schema / category / ranking / tool-action / risk-handling).
-
-## Human evaluation
-
-Generate a blank rating CSV from a finished agent run:
-
-```bash
-.venv/bin/python -m benchmarks.human_eval.make_csv benchmarks/results/<run-id> --agent mailpilot
-```
-
-Two raters fill `rater_a` / `rater_b` columns (1–5) for each (email × criterion) row. Criteria: `explanation_clarity`, `signal_grounding`, `action_coherence`, `batch_consistency`.
-
-Compute inter-rater agreement (Cohen's κ per criterion):
-
-```bash
-.venv/bin/python -m benchmarks.human_eval.irr benchmarks/results/<run-id>/mailpilot_ratings.csv
-```
 
 ## Adding a scenario
 
