@@ -19,9 +19,9 @@ def _write_trial(path: Path, predictions: list[dict], calls: int = 5):
 _E1_PERFECT = [
     {"id": "e1_e01", "category": "marketing", "priority": "low", "action": "archive", "needs_review": False},
     {"id": "e1_e02", "category": "marketing", "priority": "low", "action": "archive", "needs_review": False},
-    {"id": "e1_e03", "category": "marketing", "priority": "low", "action": "label", "needs_review": False},
+    {"id": "e1_e03", "category": "marketing", "priority": "low", "action": "archive", "needs_review": False},
     {"id": "e1_e04", "category": "work", "priority": "medium", "action": "flag", "needs_review": False},
-    {"id": "e1_e05", "category": "risk", "priority": "high", "action": "flag", "needs_review": True},
+    {"id": "e1_e05", "category": "risk", "priority": "high", "action": "escalate", "needs_review": True},
 ]
 
 

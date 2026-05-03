@@ -1,17 +1,73 @@
 {
   "scenario_id": "M4",
   "per_email": [
-    { "id": "m4_e01", "category": "billing",   "priority": "high",   "action": "flag",        "needs_review": false },
-    { "id": "m4_e02", "category": "work",      "priority": "high",   "action": "reply_draft", "needs_review": false },
-    { "id": "m4_e03", "category": "billing",   "priority": "low",    "action": "no_action",   "needs_review": false },
-    { "id": "m4_e04", "category": "risk",      "priority": "high",   "action": "escalate",    "needs_review": true  },
-    { "id": "m4_e05", "category": "work",      "priority": "high",   "action": "reply_draft", "needs_review": false },
-    { "id": "m4_e06", "category": "marketing", "priority": "low",    "action": "archive",     "needs_review": false },
-    { "id": "m4_e07", "category": "billing",   "priority": "high",   "action": "label",       "needs_review": false }
+    {
+      "id": "m4_e01",
+      "category": "billing",
+      "priority": "high",
+      "action": "flag",
+      "needs_review": false
+    },
+    {
+      "id": "m4_e02",
+      "category": "work",
+      "priority": "high",
+      "action": "reply_draft",
+      "needs_review": false
+    },
+    {
+      "id": "m4_e03",
+      "category": "billing",
+      "priority": "low",
+      "action": "flag",
+      "needs_review": false
+    },
+    {
+      "id": "m4_e04",
+      "category": "risk",
+      "priority": "high",
+      "action": "escalate",
+      "needs_review": true
+    },
+    {
+      "id": "m4_e05",
+      "category": "work",
+      "priority": "high",
+      "action": "reply_draft",
+      "needs_review": false
+    },
+    {
+      "id": "m4_e06",
+      "category": "marketing",
+      "priority": "low",
+      "action": "archive",
+      "needs_review": false
+    },
+    {
+      "id": "m4_e07",
+      "category": "billing",
+      "priority": "high",
+      "action": "label",
+      "needs_review": false
+    }
   ],
   "expected_tool_calls": [
-    { "id": "m4_e02", "tool": "reply_draft.create", "required_args": ["to", "body"] },
-    { "id": "m4_e05", "tool": "reply_draft.create", "required_args": ["to", "body"] }
+    {
+      "id": "m4_e02",
+      "tool": "reply_draft.create",
+      "required_args": [
+        "to",
+        "body"
+      ]
+    },
+    {
+      "id": "m4_e05",
+      "tool": "reply_draft.create",
+      "required_args": [
+        "to",
+        "body"
+      ]
+    }
   ],
-  "notes": "Harborwell stern tone is genuine NET-30 enforcement (not phishing — clean domain, real invoice number being followed up). QuickBooks lookalike (quickb00ks) is the false-alarm-resistance check: same urgency tone but lookalike domain reveals phishing."
+  "notes": "Harborwell stern tone is genuine NET-30 enforcement (not phishing \u2014 clean domain, real invoice number being followed up). QuickBooks lookalike (quickb00ks) is the false-alarm-resistance check: same urgency tone but lookalike domain reveals phishing. m4_e03 changed from no_action\u2192flag: incoming payouts are user-relevant."
 }

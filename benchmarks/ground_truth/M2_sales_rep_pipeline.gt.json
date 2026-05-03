@@ -1,17 +1,73 @@
 {
   "scenario_id": "M2",
   "per_email": [
-    { "id": "m2_e01", "category": "work",      "priority": "high",   "action": "reply_draft", "needs_review": false },
-    { "id": "m2_e02", "category": "work",      "priority": "high",   "action": "escalate",    "needs_review": false },
-    { "id": "m2_e03", "category": "work",      "priority": "medium", "action": "reply_draft", "needs_review": false },
-    { "id": "m2_e04", "category": "work",      "priority": "medium", "action": "label",       "needs_review": false },
-    { "id": "m2_e05", "category": "work",      "priority": "high",   "action": "flag",        "needs_review": false },
-    { "id": "m2_e06", "category": "marketing", "priority": "low",    "action": "no_action",   "needs_review": false },
-    { "id": "m2_e07", "category": "risk",      "priority": "high",   "action": "escalate",    "needs_review": true  }
+    {
+      "id": "m2_e01",
+      "category": "work",
+      "priority": "high",
+      "action": "reply_draft",
+      "needs_review": false
+    },
+    {
+      "id": "m2_e02",
+      "category": "work",
+      "priority": "high",
+      "action": "escalate",
+      "needs_review": false
+    },
+    {
+      "id": "m2_e03",
+      "category": "work",
+      "priority": "medium",
+      "action": "reply_draft",
+      "needs_review": false
+    },
+    {
+      "id": "m2_e04",
+      "category": "work",
+      "priority": "medium",
+      "action": "label",
+      "needs_review": false
+    },
+    {
+      "id": "m2_e05",
+      "category": "work",
+      "priority": "high",
+      "action": "flag",
+      "needs_review": false
+    },
+    {
+      "id": "m2_e06",
+      "category": "marketing",
+      "priority": "low",
+      "action": "archive",
+      "needs_review": false
+    },
+    {
+      "id": "m2_e07",
+      "category": "risk",
+      "priority": "high",
+      "action": "escalate",
+      "needs_review": true
+    }
   ],
   "expected_tool_calls": [
-    { "id": "m2_e01", "tool": "reply_draft.create", "required_args": ["to", "body"] },
-    { "id": "m2_e03", "tool": "reply_draft.create", "required_args": ["to", "body"] }
+    {
+      "id": "m2_e01",
+      "tool": "reply_draft.create",
+      "required_args": [
+        "to",
+        "body"
+      ]
+    },
+    {
+      "id": "m2_e03",
+      "tool": "reply_draft.create",
+      "required_args": [
+        "to",
+        "body"
+      ]
+    }
   ],
-  "notes": "Legal email is internal escalation, not Risk. The voicemail-from-David is high-urgency Work that warrants flagging not auto-reply (don't reply to a voicemail email). Domain renewal is classic scareware phishing on .support TLD."
+  "notes": "Legal email is internal escalation, not Risk. The voicemail-from-David is high-urgency Work that warrants flagging not auto-reply (don't reply to a voicemail email). Domain renewal is classic scareware phishing on .support TLD. m2_e06 changed from no_action\u2192archive: webinar promo is marketing with unsubscribe footer."
 }

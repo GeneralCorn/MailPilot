@@ -1,18 +1,79 @@
 {
   "scenario_id": "H3",
   "per_email": [
-    { "id": "h3_e01", "category": "risk",      "priority": "high",   "action": "escalate",    "needs_review": true  },
-    { "id": "h3_e02", "category": "work",      "priority": "high",   "action": "label",       "needs_review": false },
-    { "id": "h3_e03", "category": "work",      "priority": "high",   "action": "flag",        "needs_review": false },
-    { "id": "h3_e04", "category": "work",      "priority": "high",   "action": "label",       "needs_review": false },
-    { "id": "h3_e05", "category": "work",      "priority": "high",   "action": "reply_draft", "needs_review": false },
-    { "id": "h3_e06", "category": "work",      "priority": "low",    "action": "label",       "needs_review": false },
-    { "id": "h3_e07", "category": "risk",      "priority": "high",   "action": "escalate",    "needs_review": true  },
-    { "id": "h3_e08", "category": "work",      "priority": "medium", "action": "no_action",   "needs_review": false },
-    { "id": "h3_e09", "category": "marketing", "priority": "low",    "action": "no_action",   "needs_review": false }
+    {
+      "id": "h3_e01",
+      "category": "risk",
+      "priority": "high",
+      "action": "escalate",
+      "needs_review": true
+    },
+    {
+      "id": "h3_e02",
+      "category": "work",
+      "priority": "high",
+      "action": "label",
+      "needs_review": false
+    },
+    {
+      "id": "h3_e03",
+      "category": "work",
+      "priority": "high",
+      "action": "flag",
+      "needs_review": false
+    },
+    {
+      "id": "h3_e04",
+      "category": "work",
+      "priority": "high",
+      "action": "label",
+      "needs_review": false
+    },
+    {
+      "id": "h3_e05",
+      "category": "work",
+      "priority": "high",
+      "action": "reply_draft",
+      "needs_review": false
+    },
+    {
+      "id": "h3_e06",
+      "category": "work",
+      "priority": "low",
+      "action": "label",
+      "needs_review": false
+    },
+    {
+      "id": "h3_e07",
+      "category": "risk",
+      "priority": "high",
+      "action": "escalate",
+      "needs_review": true
+    },
+    {
+      "id": "h3_e08",
+      "category": "work",
+      "priority": "medium",
+      "action": "no_action",
+      "needs_review": false
+    },
+    {
+      "id": "h3_e09",
+      "category": "marketing",
+      "priority": "low",
+      "action": "archive",
+      "needs_review": false
+    }
   ],
   "expected_tool_calls": [
-    { "id": "h3_e05", "tool": "reply_draft.create", "required_args": ["to", "body"] }
+    {
+      "id": "h3_e05",
+      "tool": "reply_draft.create",
+      "required_args": [
+        "to",
+        "body"
+      ]
+    }
   ],
-  "notes": "Phishing/legit Microsoft pair: h3_e01 (micros0ft-support.net) vs h3_e02 (microsoft.com service health). The SOC advisory (h3_e04) literally names the lookalike domains used by h3_e01 and h3_e07."
+  "notes": "Phishing/legit Microsoft pair: h3_e01 (micros0ft-support.net) vs h3_e02 (microsoft.com service health). The SOC advisory (h3_e04) literally names the lookalike domains used by h3_e01 and h3_e07. h3_e09 changed from no_action\u2192archive: reddit digest matches other newsletter/digest archives."
 }

@@ -1,14 +1,52 @@
 {
   "scenario_id": "E2",
   "per_email": [
-    { "id": "e2_e01", "category": "work",      "priority": "high",   "action": "label",     "needs_review": false },
-    { "id": "e2_e02", "category": "work",      "priority": "high",   "action": "calendar",  "needs_review": false },
-    { "id": "e2_e03", "category": "billing",   "priority": "low",    "action": "no_action", "needs_review": false },
-    { "id": "e2_e04", "category": "work",      "priority": "low",    "action": "label",     "needs_review": false },
-    { "id": "e2_e05", "category": "marketing", "priority": "low",    "action": "no_action", "needs_review": false }
+    {
+      "id": "e2_e01",
+      "category": "work",
+      "priority": "high",
+      "action": "label",
+      "needs_review": false
+    },
+    {
+      "id": "e2_e02",
+      "category": "work",
+      "priority": "high",
+      "action": "calendar",
+      "needs_review": false
+    },
+    {
+      "id": "e2_e03",
+      "category": "billing",
+      "priority": "low",
+      "action": "flag",
+      "needs_review": false
+    },
+    {
+      "id": "e2_e04",
+      "category": "work",
+      "priority": "low",
+      "action": "label",
+      "needs_review": false
+    },
+    {
+      "id": "e2_e05",
+      "category": "marketing",
+      "priority": "low",
+      "action": "archive",
+      "needs_review": false
+    }
   ],
   "expected_tool_calls": [
-    { "id": "e2_e02", "tool": "calendar.create_event", "required_args": ["title", "start", "end"] }
+    {
+      "id": "e2_e02",
+      "tool": "calendar.create_event",
+      "required_args": [
+        "title",
+        "start",
+        "end"
+      ]
+    }
   ],
-  "notes": "Personal Xfinity autopay is billing but routine (no_action). Recurring 1:1 invite triggers calendar."
+  "notes": "Personal Xfinity autopay is billing but routine (no_action). Recurring 1:1 invite triggers calendar. e2_e05 changed from no_action\u2192archive: Coursera promo is unambiguous marketing. e2_e03 changed from no_action\u2192flag: routine billing notifications still warrant user visibility."
 }
