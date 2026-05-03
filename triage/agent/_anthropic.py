@@ -15,6 +15,7 @@ def call_tools(
     messages: list[dict],
     tools: list[dict],
     force_tool: str | None = None,
+    force_any: bool = False,
     max_tokens: int = 1024,
     temperature: float = 0.0,
 ) -> list[dict] | None:
@@ -22,8 +23,8 @@ def call_tools(
 
     Returns a list of {"name": str, "input": dict} for each tool_use block in the
     response, or None on API error / refusal. force_tool="X" pins the model to
-    that one tool (for single-output agents); leave it None to let the model
-    pick freely (multi-tool agents like Worker).
+    that one tool (single-output agents). force_any=True requires at least one
+    tool call but lets the model pick which (multi-tool agents that must act).
     """
     kwargs: dict = {
         "model": model,
@@ -35,6 +36,8 @@ def call_tools(
     }
     if force_tool is not None:
         kwargs["tool_choice"] = {"type": "tool", "name": force_tool}
+    elif force_any:
+        kwargs["tool_choice"] = {"type": "any"}
 
     try:
         resp = client.messages.create(**kwargs)

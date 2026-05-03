@@ -39,18 +39,18 @@ def _split_plan(plan: list[ToolCall]) -> tuple[list[ToolCall], list[ToolCall]]:
 _SYSTEM = (
     "You are the Worker in MailPilot. Given one classified email, decide what tool calls "
     "to make to handle it. You can call multiple tools in a single response.\n\n"
-    "Guidance:\n"
-    "- For work and risk emails, ALWAYS start with a `summarize` call.\n"
-    "- Risk emails must be escalated, never auto-replied or auto-archived.\n"
-    "- Marketing emails: `archive` into 'promotions' is usually enough.\n"
-    "- When a meeting email contains an RSVP signal (phrases like 'please confirm', 'RSVP',\n"
-    "  'let me know if you can attend'), ALWAYS call BOTH `calendar` and `send_email` (kind='rsvp').\n"
-    "  These two tools are gated behind a human approval UI — the user decides whether to\n"
-    "  actually send / book, so do not pre-filter on your own. Skipping send_email here is wrong.\n"
+    "Guidance per category — every email needs at least ONE actionable tool besides summarize:\n"
+    "- Marketing: `archive` (folder='promotions'). Newsletters and digests count as marketing.\n"
+    "- Risk: ALWAYS `summarize` + `escalate`. Never auto-reply or auto-archive.\n"
+    "- Billing: ALWAYS `summarize` + `flag` so the user reviews. If the email asks a question\n"
+    "  or chases an overdue item, ALSO `reply_draft` with a one-paragraph response.\n"
+    "- Work: ALWAYS `summarize`. Then pick:\n"
+    "    * `reply_draft` when the email explicitly asks for a response, decision, or summary;\n"
+    "    * `calendar` (+ `send_email` kind='rsvp') for meeting invites with RSVP language;\n"
+    "    * `label` for informational work emails (renewals, status updates, FYI).\n"
     "- Personal: prefer `reply_draft` over auto-send unless an explicit RSVP is requested.\n"
-    "- Be conservative ONLY for irreversible actions outside the proposal queue (label, archive,\n"
-    "  escalate). For calendar / send_email always include them when the email content suggests\n"
-    "  them — the user can reject in the UI.\n"
+    "- `calendar` and `send_email` are gated behind a human approval UI — never pre-filter\n"
+    "  them. The user decides; just propose them when content suggests they belong.\n"
     "- The runtime fills in `email_id`; don't supply it yourself."
 )
 
@@ -166,11 +166,12 @@ _TOOLS: list[dict] = [
 def _fewshot_messages() -> list[dict]:
     """Three few-shots in proper tool_use + tool_result form, with cache_control on the last block."""
     return [
-        # marketing → archive
+        # marketing promo → archive
         {"role": "user", "content": (
             "Subject: Big sale — 50% off this weekend\n"
             "Sender: deals@store.com\n"
             "Category: marketing\n"
+            "Required: call `archive` (folder='promotions').\n"
             "Body: Limited-time offers on everything in store."
         )},
         {"role": "assistant", "content": [
@@ -181,11 +182,29 @@ def _fewshot_messages() -> list[dict]:
             {"type": "tool_result", "tool_use_id": "fs1_a", "content": "Moved to 'promotions'"},
         ]},
 
+        # marketing newsletter / digest → still archive (no sale signal)
+        {"role": "user", "content": (
+            "Subject: Weekly TLDR — top 5 reads\n"
+            "Sender: newsletter@tldr.com\n"
+            "Category: marketing\n"
+            "Required: call `archive` (folder='promotions').\n"
+            "Body: This week's roundup of tech news. Unsubscribe at the bottom."
+        )},
+        {"role": "assistant", "content": [
+            {"type": "tool_use", "id": "fs1b_a", "name": "archive",
+             "input": {"folder": "promotions"}},
+        ]},
+        {"role": "user", "content": [
+            {"type": "tool_result", "tool_use_id": "fs1b_a", "content": "Moved to 'promotions'"},
+        ]},
+
         # work meeting → summarize + calendar + send_email(rsvp)
         {"role": "user", "content": (
             "Subject: Standup Friday 10:00 AM\n"
             "Sender: lead@acme.com\n"
             "Category: work\n"
+            "Required: `summarize` PLUS one of: `reply_draft`, `calendar` (+ `send_email` "
+            "kind='rsvp' if RSVP language), `label`.\n"
             "Body: Quick standup Friday 10–10:30 in Room 4. Please confirm."
         )},
         {"role": "assistant", "content": [
@@ -217,6 +236,7 @@ def _fewshot_messages() -> list[dict]:
             "Subject: URGENT: Verify your account NOW\n"
             "Sender: support@bank-verify.ru\n"
             "Category: risk\n"
+            "Required: `summarize` + `escalate` (target='security').\n"
             "Body: Click this link immediately to keep your account active."
         )},
         {"role": "assistant", "content": [
@@ -227,19 +247,85 @@ def _fewshot_messages() -> list[dict]:
         ]},
         {"role": "user", "content": [
             {"type": "tool_result", "tool_use_id": "fs3_a", "content": "Summary saved"},
+            {"type": "tool_result", "tool_use_id": "fs3_b", "content": "Escalated to security"},
+        ]},
+
+        # billing overdue → summarize + flag + reply_draft
+        {"role": "user", "content": (
+            "Subject: OVERDUE: Invoice #2042 — please confirm payment date\n"
+            "Sender: ar@vendor.com\n"
+            "Category: billing\n"
+            "Required: `summarize` + `flag`. Add `reply_draft` because the email asks a question.\n"
+            "Body: Invoice #2042 is now 18 days past due. Can you confirm when payment will be sent?"
+        )},
+        {"role": "assistant", "content": [
+            {"type": "tool_use", "id": "fs4_a", "name": "summarize",
+             "input": {"summary": "Vendor chasing 18-day overdue invoice #2042 and asking for a payment date."}},
+            {"type": "tool_use", "id": "fs4_b", "name": "flag",
+             "input": {"flag": True}},
+            {"type": "tool_use", "id": "fs4_c", "name": "reply_draft",
+             "input": {"body": "Thanks for the reminder — I'll confirm a payment date by end of week."}},
+        ]},
+        {"role": "user", "content": [
+            {"type": "tool_result", "tool_use_id": "fs4_a", "content": "Summary saved"},
+            {"type": "tool_result", "tool_use_id": "fs4_b", "content": "Flagged"},
+            {"type": "tool_result", "tool_use_id": "fs4_c", "content": "Draft saved"},
+        ]},
+
+        # work informational (contract renewal) → summarize + label
+        {"role": "user", "content": (
+            "Subject: Your master service agreement renews on June 1\n"
+            "Sender: success@vendor.com\n"
+            "Category: work\n"
+            "Required: `summarize` + `label` for an informational FYI/renewal.\n"
+            "Body: Your annual MSA renews automatically June 1 at the current rate. No action needed."
+        )},
+        {"role": "assistant", "content": [
+            {"type": "tool_use", "id": "fs5_a", "name": "summarize",
+             "input": {"summary": "MSA auto-renews June 1 at current rate; informational only."}},
+            {"type": "tool_use", "id": "fs5_b", "name": "label",
+             "input": {"category": "work"}},
+        ]},
+        {"role": "user", "content": [
+            {"type": "tool_result", "tool_use_id": "fs5_a", "content": "Summary saved"},
             # cache_control on the LAST few-shot block — caches system + tools + all few-shots
-            {"type": "tool_result", "tool_use_id": "fs3_b", "content": "Escalated to security",
+            {"type": "tool_result", "tool_use_id": "fs5_b", "content": "Labeled work",
              "cache_control": {"type": "ephemeral"}},
         ]},
     ]
 
 
+_CATEGORY_REQUIREMENT = {
+    Category.MARKETING: (
+        "Required: call `archive` (folder='promotions'). Newsletters, digests, and promos all "
+        "go through archive. Calling only `summarize` (or nothing) is wrong."
+    ),
+    Category.BILLING: (
+        "Required: `summarize` + `flag`. Add `reply_draft` if the email asks a question or "
+        "chases an overdue item."
+    ),
+    Category.WORK: (
+        "Required: `summarize` PLUS one of: `reply_draft` (the email asks for a reply / "
+        "decision / summary), `calendar` (+ `send_email` kind='rsvp' if RSVP language), "
+        "`label` (informational FYI/renewal/status)."
+    ),
+    Category.RISK: (
+        "Required: `summarize` + `escalate` (target='security'). Never archive or auto-reply."
+    ),
+    Category.PERSONAL: (
+        "Required: `summarize` + `reply_draft` unless an explicit RSVP asks for calendar."
+    ),
+}
+
+
 def _target_user_message(email: Message, category: Category, prior_results: list[ToolResult] | None) -> dict:
     body = email.body_plain or email.snippet or ""
+    requirement = _CATEGORY_REQUIREMENT.get(category, "")
     text = (
         f"Subject: {email.subject}\n"
         f"Sender: {email.sender}\n"
         f"Category: {category.value}\n"
+        f"{requirement}\n"
         f"Body: {body[:600]}"
     )
     if prior_results:
@@ -268,6 +354,7 @@ def plan_actions(
         system=_SYSTEM,
         messages=messages,
         tools=_TOOLS,
+        force_any=True,
         max_tokens=2048,
     )
 
