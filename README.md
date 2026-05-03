@@ -72,6 +72,6 @@ cat benchmarks/results/eval1/report.md
 
 Per-trial JSONs under `benchmarks/results/<run-id>/<agent>/<scenario>/trial_K.json` carry full provenance: `model`, `git_commit`, `timestamp`, `temperature`, `usage` (calls / input_tokens / output_tokens / estimated_cost_usd).
 
-End-to-end DeepSeek cost for the full 4×10×3 = 120 trials is roughly $0.25.
+End-to-end DeepSeek cost for the full 4×10×3 = 120 trials is under $0.10 at current `deepseek-v4-flash` pricing.
 
 See [`benchmarks/README.md`](benchmarks/README.md) for the scoring rubric (4-gate soft TSR) and how to add a new agent or scenario.
