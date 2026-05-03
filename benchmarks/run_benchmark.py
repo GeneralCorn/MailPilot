@@ -202,14 +202,19 @@ def main():
                     help="Run a single scenario by id (E1, M2, H3, ...). Overrides --difficulty.")
     ap.add_argument("--agent", choices=list(AGENTS), default="mailpilot",
                     help="Which agent to evaluate (default: mailpilot).")
+    ap.add_argument("--trials", type=int, default=3,
+                    help="How many trials per (agent, scenario). Paper uses 3-5.")
+    ap.add_argument("--run-id", default=None,
+                    help="Group output under results/<run-id>/. Reuse across --agent calls "
+                         "to bundle multiple agents into one report.")
     ap.add_argument("--max-emails", type=int, default=None,
                     help="Cap emails per scenario for very fast smoke tests.")
     ap.add_argument("--compare", action="store_true",
                     help="Compare against ground truth and show ✓/✗ per email.")
-    ap.add_argument("--output", default=None,
-                    help="Path to write the JSON results (default: benchmarks/results/<timestamp>.json).")
     ap.add_argument("--max-cost-usd", type=float, default=None,
                     help="Abort the run if accumulated estimated cost crosses this cap.")
+    ap.add_argument("--no-aggregate", action="store_true",
+                    help="Skip writing report.md after the run.")
     args = ap.parse_args()
 
     if not (os.environ.get("DEEPSEEK_API_KEY") or os.environ.get("ANTHROPIC_API_KEY")):
@@ -220,54 +225,53 @@ def main():
     persistence.init_db()
 
     sids = select_scenarios(args.difficulty, args.scenario)
-    print(f"Running {len(sids)} scenario(s): {', '.join(sids)}")
-    print(f"Compare to ground truth: {args.compare}")
+    run_id = args.run_id or datetime.now(timezone.utc).strftime("%Y%m%d-%H%M%S")
+    run_dir = RESULTS_DIR / run_id
+    run_dir.mkdir(parents=True, exist_ok=True)
+    print(f"Run dir: {run_dir}")
+    print(f"Agent: {args.agent}   trials: {args.trials}   scenarios: {', '.join(sids)}")
 
-    all_results = []
-    overall_correct = 0
-    overall_total = 0
     cost_so_far = 0.0
+    aborted = False
     for sid in sids:
         try:
             scen = load_scenario(sid)
         except FileNotFoundError as e:
             print(f"  skip {sid}: {e}")
             continue
-        out = run_one_scenario(
-            scen,
-            agent=args.agent,
-            max_emails=args.max_emails,
-            show_gt=args.compare,
-        )
-        all_results.append(out)
-        cost_so_far += out["usage"]["estimated_cost_usd"]
-        if args.max_cost_usd is not None and cost_so_far > args.max_cost_usd:
-            print(f"\nABORT: estimated cost ${cost_so_far:.4f} exceeds cap ${args.max_cost_usd:.4f}")
+        scen_dir = run_dir / args.agent / sid
+        scen_dir.mkdir(parents=True, exist_ok=True)
+        for trial in range(1, args.trials + 1):
+            print(f"\n--- {args.agent}/{sid}/trial_{trial} ---")
+            out = run_one_scenario(
+                scen,
+                agent=args.agent,
+                max_emails=args.max_emails,
+                show_gt=args.compare,
+            )
+            (scen_dir / f"trial_{trial}.json").write_text(
+                json.dumps(out, indent=2, default=str)
+            )
+            cost_so_far += out["usage"]["estimated_cost_usd"]
+            if args.max_cost_usd is not None and cost_so_far > args.max_cost_usd:
+                print(f"\nABORT: estimated cost ${cost_so_far:.4f} exceeds cap ${args.max_cost_usd:.4f}")
+                aborted = True
+                break
+        if aborted:
             break
-        if args.compare:
-            for er in out["per_email"]:
-                gt = er.get("ground_truth")
-                if not gt:
-                    continue
-                overall_total += 1
-                if (er["category"] == gt["category"]
-                        and er["priority"] == gt["priority"]
-                        and er["action"] == gt["action"]
-                        and er["needs_review"] == gt["needs_review"]):
-                    overall_correct += 1
 
-    if args.compare and overall_total:
-        print(f"\n{'='*70}")
-        print(f"OVERALL: {overall_correct}/{overall_total} rows fully correct "
-              f"({100*overall_correct/overall_total:.1f}%)")
-        print('='*70)
+    print(f"\nTotal estimated cost: ${cost_so_far:.4f}")
 
-    RESULTS_DIR.mkdir(parents=True, exist_ok=True)
-    out_path = Path(args.output) if args.output else (
-        RESULTS_DIR / f"run_{int(time.time())}.json"
-    )
-    out_path.write_text(json.dumps(all_results, indent=2, default=str))
-    print(f"\nResults JSON: {out_path}")
+    if not args.no_aggregate and not aborted:
+        from benchmarks.scoring.aggregate import aggregate, render_markdown
+        try:
+            agg = aggregate(run_dir)
+            report = render_markdown(run_dir, agg)
+            (run_dir / "report.md").write_text(report)
+            print(f"\nReport: {run_dir / 'report.md'}\n")
+            print(report)
+        except RuntimeError as exc:
+            print(f"\n(skipped report: {exc})")
 
 
 if __name__ == "__main__":
