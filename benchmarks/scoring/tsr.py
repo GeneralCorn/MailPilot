@@ -30,8 +30,9 @@ def score_scenario(predicted: list[dict], gt_per_email: list[dict], expected_too
         "action_accuracy": act_acc >= ACTION_GATE,
         "tier_accuracy": tier_acc >= TIER_GATE,
     }
+    # soft 4-gate: each passed gate contributes 0.25 to the scenario's TSR
     return {
-        "tsr": 1 if all(gates.values()) else 0,
+        "tsr": sum(1 for v in gates.values() if v) / len(gates),
         "gates": gates,
         "action_accuracy": act_acc,
         "tier_accuracy": tier_acc,

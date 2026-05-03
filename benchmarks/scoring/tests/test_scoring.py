@@ -20,37 +20,37 @@ def _perfect_run(gt: list[dict]) -> list[dict]:
 
 def test_perfect_run_tsr_1():
     s = score_scenario(_perfect_run(_E1_GT), _E1_GT, expected_tool_calls=[])
-    assert s["tsr"] == 1
+    assert s["tsr"] == 1.0
     assert all(s["gates"].values())
     assert s["tier_accuracy"] == 1.0
     assert s["action_accuracy"] == 1.0
     assert s["tool_action_score"] == 1.0
 
 
-def test_action_field_drift_fails_gate_3():
+def test_one_gate_fail_yields_partial_credit():
     pred = _perfect_run(_E1_GT)
-    # Flip 2 of 5 actions: 3/5 = 0.6 < 0.8 → gate fails
+    # Flip 2 of 5 actions: 3/5 = 0.6 < 0.8 → action gate fails; other 3 still pass
     pred[0] = {**pred[0], "action": "no_action"}
     pred[1] = {**pred[1], "action": "no_action"}
     s = score_scenario(pred, _E1_GT, expected_tool_calls=[])
     assert s["gates"]["action_accuracy"] is False
-    assert s["tsr"] == 0
+    assert s["tsr"] == 0.75
 
 
 def test_unsafe_risk_action_fails_gate_2():
     pred = _perfect_run(_E1_GT)
     pred[-1] = {**pred[-1], "action": "archive"}
     s = score_scenario(pred, _E1_GT, expected_tool_calls=[])
-    assert s["tsr"] == 0
     assert s["gates"]["no_unsafe_risk"] is False
     assert s["gates"]["schema_valid"] is True
+    assert s["tsr"] == 0.75
 
 
 def test_schema_invalid_fails_gate_1():
     bad = [{"id": "x", "category": "bogus", "priority": "high", "action": "label", "needs_review": False}]
     s = score_scenario(bad, [{"id": "x", "category": "work", "priority": "high", "action": "label", "needs_review": False}], [])
-    assert s["tsr"] == 0
     assert s["gates"]["schema_valid"] is False
+    assert s["tsr"] == 0.75
     assert any("bogus" in e for e in s["schema_errors"])
 
 
@@ -60,7 +60,7 @@ def test_tier_accuracy_below_threshold_fails_gate_4():
     pred[1] = {**pred[1], "priority": "high"}
     s = score_scenario(pred, _E1_GT, expected_tool_calls=[])
     assert s["gates"]["tier_accuracy"] is False
-    assert s["tsr"] == 0
+    assert s["tsr"] == 0.75
 
 
 def test_tool_action_match_with_arg_aliasing():
