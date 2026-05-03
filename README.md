@@ -75,11 +75,3 @@ Per-trial JSONs under `benchmarks/results/<run-id>/<agent>/<scenario>/trial_K.js
 End-to-end DeepSeek cost for the full 4×10×3 = 120 trials is roughly $0.25.
 
 See [`benchmarks/README.md`](benchmarks/README.md) for the scoring rubric (4-gate soft TSR), the human-eval CSV / Cohen's κ workflow, and how to add a new agent or scenario.
-
-## Storage layout
-
-- `database/emails.json` — imported email bodies (only `Import Gmail` writes here)
-- `database/mailpilot.sqlite3` — pipeline state, snapshots, per-email mutable fields
-- `benchmarks/scenarios/` + `benchmarks/ground_truth/` — the benchmark dataset (tracked in git)
-- `benchmarks/results/` — run output (gitignored, regeneratable)
-- `token.json`, `credentials.json` — Google OAuth secrets (gitignored)
