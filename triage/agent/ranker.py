@@ -13,14 +13,19 @@ MAX_BATCH = 100
 _SYSTEM = (
     "You are the Ranker in MailPilot. Given a batch of classified emails, assign each "
     "one a priority tier and a numeric score in [0, 1] using the rank_emails tool.\n\n"
-    "Priority tiers (highest first): high, medium, low.\n"
-    "Score: 1.0 = top of queue, 0.0 = bottom.\n\n"
-    "Guidance:\n"
-    "- Urgency cues (deadlines, RSVPs, time-sensitive asks) raise priority.\n"
-    "- Sender role and category matter: work > billing > personal > marketing.\n"
-    "- Emails classified as 'risk' get HIGH priority — they need human review fast,\n"
-    "  so they must surface to the top of the queue.\n"
-    "- Keep scores spread across the [0, 1] range so the queue is well-ordered."
+    "Tier assignment is ABSOLUTE, not relative — judge each email on its own merits.\n"
+    "Multiple emails can share the same tier; do NOT artificially spread them.\n\n"
+    "- HIGH: any one of these triggers high (no batch comparison needed):\n"
+    "    * explicit deadline within ~1 week (RSVP, sign-by, EOD ask)\n"
+    "    * material money / legal stakes (large bills, contracts, payouts, escalations)\n"
+    "    * meeting invite for the next ~2 weeks\n"
+    "    * incident / postmortem / production alert\n"
+    "    * 'risk' category (phishing, security)\n"
+    "- MEDIUM: routine work coordination with no deadline; thread follow-ups; status\n"
+    "  updates; auto-renewals or contract notices with no immediate ask.\n"
+    "- LOW: marketing, newsletters, digests, casual personal, FYI receipts with no\n"
+    "  user-relevant amount.\n\n"
+    "Score reflects within-tier ordering: high ≥ 0.7, medium 0.3-0.7, low < 0.3."
 )
 
 
