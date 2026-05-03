@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from typing import Callable
+
 from triage.schemas import Category, Message, State
 
 from .evaluator import (
@@ -12,6 +14,8 @@ from .router import route
 
 MAX_ROUTER_EVAL_ITERATIONS = 3
 
+EvaluatorFn = Callable[[Message, State], EvaluatorResult]
+
 
 def _is_reliable(result: EvaluatorResult) -> bool:
     if result.confidence < LOW_CONFIDENCE_THRESHOLD:
@@ -22,7 +26,9 @@ def _is_reliable(result: EvaluatorResult) -> bool:
     return True
 
 
-def route_eval_loop(email: Message, state: State) -> EvaluatorResult:
+def route_eval_loop(
+    email: Message, state: State, *, evaluator_fn: EvaluatorFn | None = None
+) -> EvaluatorResult:
     feedback: str | None = None
     iterations = 0
     result: EvaluatorResult | None = None
@@ -35,7 +41,8 @@ def route_eval_loop(email: Message, state: State) -> EvaluatorResult:
                 "category": state.classifications.get(email.id, Category.UNCLASSIFIED).value,
                 "confidence": state.confidence_scores.get(email.id, 0.0),
             }
-        result = evaluate(email, state)
+        # resolve at call time so test patches on `evaluate` still take effect
+        result = (evaluator_fn or evaluate)(email, state)
 
         if _is_reliable(result):
             break

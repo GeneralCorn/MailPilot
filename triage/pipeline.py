@@ -41,6 +41,7 @@ def run_pipeline(
     run_id: str | None = None,
     *,
     resume: bool = True,
+    evaluator_fn=None,
 ) -> tuple[State, str]:
     """Drive Input -> Router/Evaluator loop -> Ranker -> Worker for a batch.
 
@@ -81,7 +82,7 @@ def run_pipeline(
             continue
 
         def _loop(s: State, _m: Message = m) -> None:
-            route_eval_loop(_m, s)
+            route_eval_loop(_m, s, evaluator_fn=evaluator_fn)
 
         run_stage("evaluator", _loop, state, run_id=run_id, email_id=m.id)
 

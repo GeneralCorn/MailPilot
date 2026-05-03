@@ -102,54 +102,22 @@ def wipe_email_state(email_ids: list[str]) -> None:
     conn.close()
 
 
-# ── Action derivation ───────────────────────────────────────────────────────
+from benchmarks.baselines import mailpilot_full, no_evaluator, rule_based, single_prompt  # noqa: E402
 
-def derive_primary_action(state_row: dict, in_needs_review: bool) -> str:
-    """Reduce the agent's multi-faceted output to a single comparable 'action' label."""
-    escalations = state_row.get("escalations") or []
-    proposed = state_row.get("proposed_actions") or []
-    external = state_row.get("external_actions") or []
-    flagged = bool(state_row.get("flagged", 0))
-    draft_reply = state_row.get("draft_reply")
-    calendar = state_row.get("calendar_event")
+AGENTS = {
+    "mailpilot": mailpilot_full,
+    "no_eval":   no_evaluator,
+    "rule":      rule_based,
+    "single":    single_prompt,
+}
 
-    # 1. Risk gating wins above all (matches GT for needs_review=true rows)
-    if escalations or in_needs_review:
-        return "escalate"
-
-    # 2. Proposed actions reflect what the worker decided but hasn't fired yet
-    proposed_tools = [a.get("tool") for a in proposed if isinstance(a, dict)]
-    if "calendar" in proposed_tools:
-        return "calendar"
-    if "send_email" in proposed_tools or "reply_draft" in proposed_tools or draft_reply:
-        return "reply_draft"
-
-    # 3. Auto-executed safe actions
-    executed_tools = [a.get("tool") for a in external if isinstance(a, dict)]
-    if "archive" in executed_tools:
-        return "archive"
-    if "label" in executed_tools:
-        return "label"
-
-    # 4. Flagging without escalation
-    if flagged:
-        return "flag"
-
-    # 5. Calendar event already created (rare in benchmark — proposals usually pending)
-    if calendar:
-        return "calendar"
-
-    return "no_action"
-
-
-# ── Main run loop ───────────────────────────────────────────────────────────
 
 def run_one_scenario(
     scenario: dict,
     *,
+    agent: str,
     max_emails: int | None,
     show_gt: bool,
-    verbose: bool,
 ) -> dict:
     sid = scenario["scenario_id"]
     name = scenario["scenario_name"]
@@ -159,147 +127,70 @@ def run_one_scenario(
         emails = emails[:max_emails]
 
     print(f"\n{'='*70}")
-    print(f"=== {sid}: {name}  ({diff}, {len(emails)} email{'s' if len(emails)!=1 else ''}) ===")
+    print(f"=== {sid}: {name}  ({diff}, {len(emails)} email{'s' if len(emails)!=1 else ''}, agent={agent}) ===")
     print('='*70)
 
+    # mailpilot + no_eval go through run_pipeline, which reads/writes sqlite;
+    # wiping is harmless for the others.
     wipe_email_state([e["id"] for e in emails])
 
-    msgs = []
-    for e in emails:
-        # Message schema expects str for thread_id, but benchmarks use null for standalone emails
-        normalized = {**e, "thread_id": e.get("thread_id") or ""}
-        msgs.append(Message(**normalized))
-
+    msgs = [Message(**{**e, "thread_id": e.get("thread_id") or ""}) for e in emails]
     gt = load_ground_truth(sid) if show_gt else None
     gt_by_id = {row["id"]: row for row in (gt["per_email"] if gt else [])}
 
     _usage.reset()
     t0 = time.time()
-    state, run_id = run_pipeline(msgs)
+    predictions = AGENTS[agent].run(msgs)
     elapsed = time.time() - t0
     usage = _usage.snapshot()
     model = default_model()
     usage["estimated_cost_usd"] = estimate_cost_usd(model, usage["input_tokens"], usage["output_tokens"])
 
-    print(f"\n[run_id: {run_id}]   total time: {elapsed:.1f}s   ({elapsed/len(emails):.1f}s/email)\n")
+    print(f"\ntime: {elapsed:.1f}s ({elapsed/len(emails):.1f}s/email)   "
+          f"calls={usage['calls']} tokens={usage['input_tokens']}+{usage['output_tokens']} "
+          f"≈${usage['estimated_cost_usd']:.4f}\n")
 
-    results: list[dict] = []
-    correct_count = 0
-
-    for i, msg in enumerate(msgs, 1):
-        eid = msg.id
-        row = persistence.get_email_state(eid)
-        in_needs_review = eid in state.needs_review
-        action = derive_primary_action(row, in_needs_review)
-
-        category = row.get("category") or "?"
-        priority = row.get("priority") or "?"
-        status = row.get("status") or "?"
-        flagged = bool(row.get("flagged", 0))
-        escalations = row.get("escalations") or []
-        proposed = row.get("proposed_actions") or []
-        external = row.get("external_actions") or []
-        summary = (row.get("summary") or "").strip()
-        draft = (row.get("draft_reply") or "").strip()
-        cal = row.get("calendar_event")
-
-        # ── compact per-email console output ────────────────────────────────
-        subj = (msg.subject or "")[:65]
-        print(f"[{i}/{len(msgs)}] {eid}  {subj}")
-        print(f"    category={category}  priority={priority}  status={status}")
-        flag_label = "YES" if flagged else "no"
-        review_label = "YES" if in_needs_review else "no"
-        print(f"    primary_action={action}  flagged={flag_label}  needs_review={review_label}")
-
-        if escalations:
-            for esc in escalations:
-                reason = esc.get("reason", "(no reason)") if isinstance(esc, dict) else str(esc)
-                print(f"    !! escalation: {reason}")
-
-        if proposed:
-            for p in proposed:
-                if not isinstance(p, dict): continue
-                tool = p.get("tool", "?")
-                params = p.get("parameters", {}) or {}
-                # show only the most informative fields
-                preview_keys = ["title", "to", "subject", "start_time", "end_time"]
-                preview = {k: params[k] for k in preview_keys if k in params}
-                print(f"    -> proposed: {tool}  {preview if preview else ''}")
-
-        if external:
-            for x in external:
-                if not isinstance(x, dict): continue
-                tool = x.get("tool", "?")
-                ok = "ok" if x.get("success") else "failed"
-                print(f"    -- executed: {tool} ({ok})")
-
-        if summary and verbose:
-            print(f"    summary: {summary[:120]}{'…' if len(summary)>120 else ''}")
-        if draft and verbose:
-            print(f"    draft: {draft[:120]}{'…' if len(draft)>120 else ''}")
-        if cal and verbose:
-            print(f"    calendar_event: {cal}")
-
-        # ── ground truth comparison (optional) ──────────────────────────────
-        gt_row = gt_by_id.get(eid)
+    correct = 0
+    for i, p in enumerate(predictions, 1):
+        subj = next((m.subject for m in msgs if m.id == p["id"]), "")[:65]
+        print(f"[{i}/{len(msgs)}] {p['id']}  {subj}")
+        print(f"    category={p['category']}  priority={p['priority']}  "
+              f"action={p['action']}  needs_review={p['needs_review']}")
+        gt_row = gt_by_id.get(p["id"])
         if gt_row:
-            ok = (
-                category == gt_row["category"]
-                and priority == gt_row["priority"]
-                and action == gt_row["action"]
-                and in_needs_review == gt_row["needs_review"]
-            )
-            mark = "✓" if ok else "✗"
-            if not ok:
-                diffs = []
-                if category != gt_row["category"]:
-                    diffs.append(f"cat={category}!=gt:{gt_row['category']}")
-                if priority != gt_row["priority"]:
-                    diffs.append(f"pri={priority}!=gt:{gt_row['priority']}")
-                if action != gt_row["action"]:
-                    diffs.append(f"act={action}!=gt:{gt_row['action']}")
-                if in_needs_review != gt_row["needs_review"]:
-                    diffs.append(f"review={in_needs_review}!=gt:{gt_row['needs_review']}")
-                print(f"    {mark} GT mismatch: {', '.join(diffs)}")
+            ok = (p["category"] == gt_row["category"]
+                  and p["priority"] == gt_row["priority"]
+                  and p["action"] == gt_row["action"]
+                  and p["needs_review"] == gt_row["needs_review"])
+            if ok:
+                correct += 1
+                print("    ✓ matches GT")
             else:
-                correct_count += 1
-                print(f"    {mark} matches GT")
+                diffs = [
+                    f"{k}={p[k]}!=gt:{gt_row[k]}"
+                    for k in ("category", "priority", "action", "needs_review")
+                    if p[k] != gt_row[k]
+                ]
+                print(f"    ✗ {', '.join(diffs)}")
+        p["ground_truth"] = gt_row
         print()
 
-        results.append({
-            "id": eid,
-            "subject": msg.subject,
-            "category": category,
-            "priority": priority,
-            "status": status,
-            "primary_action": action,
-            "flagged": flagged,
-            "needs_review": in_needs_review,
-            "escalations": escalations,
-            "proposed_actions": proposed,
-            "external_actions": external,
-            "summary": summary,
-            "draft_reply": draft,
-            "calendar_event": cal,
-            "ground_truth": gt_row,
-        })
-
     if gt:
-        print(f"GT score: {correct_count}/{len(msgs)} fully-correct rows "
-              f"({100*correct_count/len(msgs):.0f}%)\n")
+        print(f"GT score: {correct}/{len(msgs)} fully-correct rows "
+              f"({100*correct/len(msgs):.0f}%)\n")
 
     return {
         "scenario_id": sid,
         "scenario_name": name,
         "difficulty": diff,
-        "run_id": run_id,
+        "agent": agent,
         "elapsed_seconds": elapsed,
         "model": model,
         "git_commit": _git_commit(),
         "timestamp": datetime.now(timezone.utc).isoformat(),
         "temperature": 0.0,
         "usage": usage,
-        "per_email": results,
+        "per_email": predictions,
     }
 
 
@@ -309,12 +200,12 @@ def main():
                     help="Run all scenarios at this difficulty (default: easy).")
     ap.add_argument("--scenario", default=None,
                     help="Run a single scenario by id (E1, M2, H3, ...). Overrides --difficulty.")
+    ap.add_argument("--agent", choices=list(AGENTS), default="mailpilot",
+                    help="Which agent to evaluate (default: mailpilot).")
     ap.add_argument("--max-emails", type=int, default=None,
                     help="Cap emails per scenario for very fast smoke tests.")
     ap.add_argument("--compare", action="store_true",
                     help="Compare against ground truth and show ✓/✗ per email.")
-    ap.add_argument("--verbose", action="store_true",
-                    help="Show summaries, drafts, and other long fields.")
     ap.add_argument("--output", default=None,
                     help="Path to write the JSON results (default: benchmarks/results/<timestamp>.json).")
     ap.add_argument("--max-cost-usd", type=float, default=None,
@@ -344,9 +235,9 @@ def main():
             continue
         out = run_one_scenario(
             scen,
+            agent=args.agent,
             max_emails=args.max_emails,
             show_gt=args.compare,
-            verbose=args.verbose,
         )
         all_results.append(out)
         cost_so_far += out["usage"]["estimated_cost_usd"]
@@ -361,7 +252,7 @@ def main():
                 overall_total += 1
                 if (er["category"] == gt["category"]
                         and er["priority"] == gt["priority"]
-                        and er["primary_action"] == gt["action"]
+                        and er["action"] == gt["action"]
                         and er["needs_review"] == gt["needs_review"]):
                     overall_correct += 1
 
