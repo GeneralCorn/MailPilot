@@ -7,7 +7,6 @@ from pydantic import BaseModel, Field
 
 
 # ── Enums ──
-
 class Category(str, Enum):
     MARKETING = "marketing"
     PERSONAL = "personal"
@@ -16,14 +15,10 @@ class Category(str, Enum):
     BILLING = "billing"
     UNCLASSIFIED = "unclassified"
 
-
 class Priority(str, Enum):
-    URGENT = "urgent"
-    IMPORTANT = "important"
-    NORMAL = "normal"
+    HIGH = "high"
+    MEDIUM = "medium"
     LOW = "low"
-    MINIMAL = "minimal"
-
 
 class Status(str, Enum):
     PENDING = "pending"
@@ -59,6 +54,7 @@ class Message(BaseModel):
     thread_id: str = ""
     source: str = "manual"
     category: str = "unclassified"
+    needs_review: bool = False
 
 class AgentMessage(BaseModel):
     """Minimal prompt message passed by the orchestrator."""
