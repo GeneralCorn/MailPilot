@@ -9,7 +9,24 @@ from .actions import (
     flag_email,
     label_email,
     no_action,
+    send_confirmation_email,
+    send_rsvp_email,
+    summarize_email,
 )
+
+
+def _send_email_dispatch(email_id: str, kind: str, body: str, **extra) -> ToolResult:
+    if kind == "rsvp":
+        return send_rsvp_email(email_id, decision=extra.get("decision", "accept"), body=body)
+    if kind == "confirmation":
+        return send_confirmation_email(email_id, body=body, subject_override=extra.get("subject_override", ""))
+    return ToolResult(
+        tool=Action.SEND_EMAIL,
+        success=False,
+        message=f"unknown send_email kind: {kind!r}",
+        data={"kind": kind},
+    )
+
 
 _TOOL_DISPATCH: dict[Action, Callable[..., ToolResult]] = {
     Action.LABEL: label_email,
@@ -18,6 +35,8 @@ _TOOL_DISPATCH: dict[Action, Callable[..., ToolResult]] = {
     Action.REPLY_DRAFT: draft_reply,
     Action.CALENDAR: create_calendar_event,
     Action.ESCALATE: escalate_email,
+    Action.SUMMARIZE: summarize_email,
+    Action.SEND_EMAIL: _send_email_dispatch,
     Action.NO_ACTION: no_action,
 }
 

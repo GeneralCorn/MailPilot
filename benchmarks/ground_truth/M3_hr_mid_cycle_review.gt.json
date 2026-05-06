@@ -1,0 +1,16 @@
+{
+  "scenario_id": "M3",
+  "per_email": [
+    { "id": "m3_e01", "category": "billing",   "priority": "medium", "action": "flag",        "needs_review": false },
+    { "id": "m3_e02", "category": "risk",      "priority": "high",   "action": "escalate",    "needs_review": true  },
+    { "id": "m3_e03", "category": "work",      "priority": "medium", "action": "calendar",    "needs_review": false },
+    { "id": "m3_e04", "category": "marketing", "priority": "low",    "action": "archive",     "needs_review": false },
+    { "id": "m3_e05", "category": "marketing", "priority": "low",    "action": "archive",     "needs_review": false },
+    { "id": "m3_e06", "category": "billing",   "priority": "high",   "action": "flag",        "needs_review": false },
+    { "id": "m3_e07", "category": "personal",  "priority": "low",    "action": "no_action",   "needs_review": false }
+  ],
+  "expected_tool_calls": [
+    { "id": "m3_e03", "tool": "calendar.create_event", "required_args": ["title", "start", "end"] }
+  ],
+  "notes": "Open enrollment uses promo language but is genuine billing/benefits. Harassment complaint must escalate not auto-reply. Payroll under-withholding is high-urgency billing distinct from routine HR work."
+}

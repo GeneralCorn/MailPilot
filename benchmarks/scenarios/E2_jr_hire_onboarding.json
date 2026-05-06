@@ -1,0 +1,47 @@
+{
+  "scenario_id": "E2",
+  "scenario_name": "New jr hire onboarding",
+  "difficulty": "easy",
+  "emails": [
+    {
+      "id": "e2_e01",
+      "subject": "Welcome to Aurora Labs — onboarding checklist",
+      "sender": "People Ops <people@auroralabs.io>",
+      "body_plain": "Hi Maya,\n\nWelcome to Aurora Labs! Your first day is Monday. Here's your onboarding checklist:\n\n- Pick up your laptop from reception (8:30 AM)\n- Complete I-9 forms via Rippling (link sent separately)\n- Read the engineering handbook (in Notion)\n- Lunch with the team at noon\n\nYour buddy is Daniel Kim. He'll DM you on Slack Monday morning.\n\nLet me know if you have any questions.\n\nBest,\nPriya — People Ops",
+      "received_at": "2026-04-15T08:00:00Z",
+      "thread_id": null
+    },
+    {
+      "id": "e2_e02",
+      "subject": "Calendar invite: 1:1 with manager — Tuesday 2pm",
+      "sender": "Daniel Kim <daniel.kim@auroralabs.io>",
+      "body_plain": "Hi Maya,\n\nLet's set up a recurring weekly 1:1 starting next Tuesday, April 21, from 2:00pm to 2:30pm in conference room Larch (or join via the Meet link).\n\nWe'll cover ramp-up goals and any blockers. Add to your calendar — I'll send the formal invite from the team calendar shortly.\n\n— Daniel",
+      "received_at": "2026-04-15T09:30:00Z",
+      "thread_id": null
+    },
+    {
+      "id": "e2_e03",
+      "subject": "Your Comcast Internet bill — autopay scheduled",
+      "sender": "Xfinity Billing <billing@xfinity.com>",
+      "body_plain": "Your monthly Xfinity Internet bill of $89.99 will be charged to the card ending in 4287 on April 22.\n\nYou can view your statement and manage autopay at xfinity.com/billing.\n\nThis is an automated message; please do not reply.",
+      "received_at": "2026-04-15T11:00:00Z",
+      "thread_id": null
+    },
+    {
+      "id": "e2_e04",
+      "subject": "GitHub: you've been added to aurora/main repository",
+      "sender": "GitHub <noreply@github.com>",
+      "body_plain": "Daniel Kim added you to the Aurora/main repository with write access.\n\nView the repo: https://github.com/Aurora/main\n\n— GitHub Notifications",
+      "received_at": "2026-04-15T12:15:00Z",
+      "thread_id": null
+    },
+    {
+      "id": "e2_e05",
+      "subject": "Coursera — Spring sale ends today",
+      "sender": "Coursera <promo@coursera.org>",
+      "body_plain": "Last chance: 40% off Coursera Plus subscriptions. Today only.\n\nClaim offer | Browse catalog\n\nUnsubscribe",
+      "received_at": "2026-04-15T16:00:00Z",
+      "thread_id": null
+    }
+  ]
+}

@@ -60,6 +60,10 @@ cover/
 local_settings.py
 db.sqlite3
 db.sqlite3-journal
+database/mailpilot.sqlite3
+database/mailpilot.sqlite3-journal
+database/mailpilot.sqlite3-wal
+database/mailpilot.sqlite3-shm
 credentials.json
 token.json
 
@@ -209,3 +213,11 @@ marimo/_lsp/
 __marimo__/
 
 *.json
+
+# benchmark scenarios + ground truth are tracked; results are regeneratable
+!benchmarks/scenarios/*.json
+!benchmarks/ground_truth/*.json
+benchmarks/results/
+
+# macOS
+.DS_Store

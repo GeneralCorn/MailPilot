@@ -1,0 +1,63 @@
+{
+  "scenario_id": "M2",
+  "scenario_name": "Sales rep pipeline",
+  "difficulty": "medium",
+  "emails": [
+    {
+      "id": "m2_e01",
+      "subject": "Re: pricing for the 250-seat Acme deal",
+      "sender": "Jordan Reyes <jordan.reyes@acmecorp.com>",
+      "body_plain": "Hi Tasha,\n\nThanks for the call yesterday. Looking at the proposal — the 250-seat tier looks great but procurement is asking for a 12-month NET-60 instead of the NET-30 in the contract.\n\nCan we make that work? Trying to close before our budget cycle resets next Friday.\n\n— Jordan",
+      "received_at": "2026-04-15T07:55:00Z",
+      "thread_id": "m2_t01"
+    },
+    {
+      "id": "m2_e02",
+      "subject": "Re: pricing for the 250-seat Acme deal",
+      "sender": "Diane Park (Legal) <dpark@yourcompany.com>",
+      "body_plain": "Tasha,\n\nNET-60 needs VP approval per our contracting policy. Loop me in before you send any redline. Also flagging: Acme's parent company was acquired last week — we need to re-run the credit check before final signature.\n\nI'll start the credit review now. Don't promise NET-60 in writing yet.\n\n— Diane",
+      "received_at": "2026-04-15T08:42:00Z",
+      "thread_id": "m2_t01"
+    },
+    {
+      "id": "m2_e03",
+      "subject": "Partnership inquiry — co-marketing with us?",
+      "sender": "Ricardo Avila <ricardo@meridianstack.io>",
+      "body_plain": "Hi,\n\nWe're a Series A SaaS company with overlapping ICP — both targeting mid-market ops teams. Would you be open to exploring a co-marketing or referral partnership?\n\nHappy to hop on a 20-min intro call. Let me know what works.\n\n— Ricardo, Head of Partnerships, Meridian",
+      "received_at": "2026-04-15T09:30:00Z",
+      "thread_id": null
+    },
+    {
+      "id": "m2_e04",
+      "subject": "Salesforce notification: 3 leads expired in your queue",
+      "sender": "Salesforce <noreply@salesforce.com>",
+      "body_plain": "3 leads in your queue have not been actioned in 14 days and are about to be returned to the lead pool.\n\n- Megan Clark, Northwind Systems\n- Hiroshi Tanaka, BlueLake Inc\n- Eli Goldfarb, Constella\n\nLog in to take action.",
+      "received_at": "2026-04-15T11:00:00Z",
+      "thread_id": null
+    },
+    {
+      "id": "m2_e05",
+      "subject": "Voicemail: David at Cordova Bank — \"call me back ASAP, urgent\"",
+      "sender": "Voicemail Transcripts <voicemail@yourcompany.com>",
+      "body_plain": "Voicemail received at 10:48 AM from David Sherwin, Cordova Bank, +1 415-555-0188.\n\nTranscript: Hey Tasha, it's David from Cordova. Need to talk to you about the contract issue our compliance team flagged. Call me back ASAP — this is time sensitive. Thanks.",
+      "received_at": "2026-04-15T11:05:00Z",
+      "thread_id": null
+    },
+    {
+      "id": "m2_e06",
+      "subject": "[Webinar] How top reps are closing 2x with AI prospecting",
+      "sender": "RevOps Weekly <newsletter@revopsweekly.com>",
+      "body_plain": "Join our free webinar Thursday at 1pm ET — three closers share their AI-powered prospecting playbook. Limited seats, register now.\n\nUnsubscribe | Privacy",
+      "received_at": "2026-04-15T13:30:00Z",
+      "thread_id": null
+    },
+    {
+      "id": "m2_e07",
+      "subject": "Final Notice: Your domain TASHA-SALES.COM expires in 24 hours",
+      "sender": "Domain Renewal Services <billing@domain-renewal-services.support>",
+      "body_plain": "Your domain TASHA-SALES.COM is set to expire in 24 hours. Failure to renew will result in permanent loss of the domain and any websites hosted on it.\n\nRenew now to avoid losing your business: http://domain-renewal-services.support/renew?d=tasha-sales\n\nPrice: $89.99 USD\n\nThis is your final notice.",
+      "received_at": "2026-04-15T16:00:00Z",
+      "thread_id": null
+    }
+  ]
+}

@@ -1,0 +1,59 @@
+{
+  "scenario_id": "E3",
+  "per_email": [
+    {
+      "id": "e3_e01",
+      "category": "work",
+      "priority": "high",
+      "action": "reply_draft",
+      "needs_review": false
+    },
+    {
+      "id": "e3_e02",
+      "category": "billing",
+      "priority": "medium",
+      "action": "flag",
+      "needs_review": false
+    },
+    {
+      "id": "e3_e03",
+      "category": "work",
+      "priority": "high",
+      "action": "reply_draft",
+      "needs_review": false
+    },
+    {
+      "id": "e3_e04",
+      "category": "marketing",
+      "priority": "low",
+      "action": "archive",
+      "needs_review": false
+    },
+    {
+      "id": "e3_e05",
+      "category": "personal",
+      "priority": "low",
+      "action": "flag",
+      "needs_review": false
+    }
+  ],
+  "expected_tool_calls": [
+    {
+      "id": "e3_e01",
+      "tool": "reply_draft.create",
+      "required_args": [
+        "to",
+        "body"
+      ]
+    },
+    {
+      "id": "e3_e03",
+      "tool": "reply_draft.create",
+      "required_args": [
+        "to",
+        "body"
+      ]
+    }
+  ],
+  "notes": "Both customer questions need drafted replies. Square statement is routine billing. Yelp ad report is informational marketing. Thank-you is flag-worthy goodwill. e3_e02 changed from no_action\u2192flag: monthly business statement is accounting-relevant. e3_e04 changed from no_action\u2192archive: ad-performance reports follow the marketing\u2192archive convention."
+}

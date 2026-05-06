@@ -1,0 +1,63 @@
+{
+  "scenario_id": "M4",
+  "scenario_name": "Freelancer multi-client",
+  "difficulty": "medium",
+  "emails": [
+    {
+      "id": "m4_e01",
+      "subject": "FINAL NOTICE: invoice #2284 overdue 32 days — payment required immediately",
+      "sender": "Accounts Payable <ap@harborwell-inc.com>",
+      "body_plain": "Dear contractor,\n\nThis is our final notice that invoice #2284 ($4,200.00) is now 32 days past due. Per the terms of your contract, this invoice was due NET-30 from receipt.\n\nPlease remit payment by April 22 to avoid service disruption and possible referral to our collections partner.\n\n— Harborwell Accounts Payable",
+      "received_at": "2026-04-15T08:00:00Z",
+      "thread_id": null
+    },
+    {
+      "id": "m4_e02",
+      "subject": "Re: copy revisions for the launch page",
+      "sender": "Maya Weiss <maya@bumblefin-design.com>",
+      "body_plain": "Hi Cobbi,\n\nFinally had time to review your draft — it's almost there. Two notes:\n\n1. The hero CTA still says 'Try the beta' but we're past the beta. Can we go with 'Get started free' instead?\n2. The feature list under the fold needs to match the new four-pillar framing we agreed on Tuesday.\n\nCan you turn these around by EOD Wednesday so we can stage Friday?\n\nThanks,\nMaya",
+      "received_at": "2026-04-15T09:30:00Z",
+      "thread_id": null
+    },
+    {
+      "id": "m4_e03",
+      "subject": "Stripe payout completed — $3,840.00 to your bank account",
+      "sender": "Stripe <noreply@stripe.com>",
+      "body_plain": "Hi,\n\nA payout of $3,840.00 was sent to your bank account ending in 9047. Funds typically arrive in 2 business days.\n\nThis payout includes 6 invoices paid between April 8 and April 14. View details in the Stripe dashboard.\n\n— Stripe",
+      "received_at": "2026-04-15T10:00:00Z",
+      "thread_id": null
+    },
+    {
+      "id": "m4_e04",
+      "subject": "URGENT — your account has unpaid charges, action required to avoid suspension",
+      "sender": "QuickBooks Billing <support@quickb00ks-billing.com>",
+      "body_plain": "Hi,\n\nWe've been unable to charge your card on file for QuickBooks Pro. Your subscription will be suspended in 48 hours and you will lose access to your books and tax documents.\n\nUpdate payment method now to avoid suspension: http://quickb00ks-billing.com/update-payment\n\nQuickBooks Billing Team",
+      "received_at": "2026-04-15T11:30:00Z",
+      "thread_id": null
+    },
+    {
+      "id": "m4_e05",
+      "subject": "Project kickoff next Tuesday — confirming scope and rate",
+      "sender": "Tessa Nguyen <tessa@northbeacon.studio>",
+      "body_plain": "Hey,\n\nQuick recap of what we discussed for the new project:\n- Scope: 6-page marketing site copy, brand voice guidelines\n- Timeline: kickoff April 22, deliverables May 15\n- Rate: $90/hr, est 30-40 hrs, NET-15\n\nIf this still works on your end, just reply confirming and I'll send the SOW for sig today.\n\n— Tessa",
+      "received_at": "2026-04-15T13:00:00Z",
+      "thread_id": null
+    },
+    {
+      "id": "m4_e06",
+      "subject": "Webflow: 25% off University courses this week",
+      "sender": "Webflow Education <education@webflow.com>",
+      "body_plain": "Level up: 25% off all Webflow University paid courses this week only.\n\nIncluding the new 'Designing for Conversion' course just released.\n\nUnsubscribe | View courses",
+      "received_at": "2026-04-15T14:30:00Z",
+      "thread_id": null
+    },
+    {
+      "id": "m4_e07",
+      "subject": "Reminder: estimated quarterly tax payment due April 15",
+      "sender": "TurboTax Self-Employed <noreply@intuit.com>",
+      "body_plain": "Hi,\n\nA reminder that the Q1 estimated quarterly tax payment is due today, April 15, 2026.\n\nIf you haven't already, file via TurboTax Self-Employed or directly through IRS Direct Pay. Late payments accrue interest and penalties.",
+      "received_at": "2026-04-15T15:30:00Z",
+      "thread_id": null
+    }
+  ]
+}

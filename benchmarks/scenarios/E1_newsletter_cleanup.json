@@ -1,0 +1,47 @@
+{
+  "scenario_id": "E1",
+  "scenario_name": "Newsletter cleanup for new grad/intern",
+  "difficulty": "easy",
+  "emails": [
+    {
+      "id": "e1_e01",
+      "subject": "Your weekly TLDR — top 5 tech reads",
+      "sender": "TLDR <newsletter@tldrnewsletter.com>",
+      "body_plain": "Hi reader,\n\nHere are this week's top reads in tech. From AI breakthroughs to startup funding rounds, we've got you covered.\n\n1. OpenAI announces new model\n2. Major cloud provider outage\n3. New JavaScript runtime hits 1.0\n4. Crypto exchange faces regulatory probe\n5. Robotics firm raises Series C\n\nUnsubscribe | Manage preferences\n\nTLDR Inc, 123 Market St, San Francisco CA 94103",
+      "received_at": "2026-04-15T07:00:00Z",
+      "thread_id": null
+    },
+    {
+      "id": "e1_e02",
+      "subject": "[Promo] 30% off all Coursera Plus subscriptions",
+      "sender": "Coursera <noreply@coursera.org>",
+      "body_plain": "Limited-time offer: get 30% off Coursera Plus and unlock 7,000+ courses. Offer expires Sunday at midnight PT.\n\nAccess specializations from Stanford, Yale, Google, and more.\n\nClaim offer now | View terms\n\nYou're receiving this email because you signed up for Coursera updates.",
+      "received_at": "2026-04-15T08:12:00Z",
+      "thread_id": null
+    },
+    {
+      "id": "e1_e03",
+      "subject": "GitHub digest: 12 new stars on your repos this week",
+      "sender": "GitHub <noreply@github.com>",
+      "body_plain": "Here's what happened in your GitHub network this week.\n\n- algo-practice: 8 new stars\n- intern-portfolio: 4 new stars\n- 2 new followers\n\nStay productive,\nThe GitHub Team\n\nUnsubscribe from this digest in your notification settings.",
+      "received_at": "2026-04-15T09:00:00Z",
+      "thread_id": null
+    },
+    {
+      "id": "e1_e04",
+      "subject": "Your career fair RSVP confirmation — UIUC ECE",
+      "sender": "ECE Career Services <ece-careers@illinois.edu>",
+      "body_plain": "Hi,\n\nThis confirms your RSVP for the spring career fair on Thursday, April 25, 1pm-5pm at the I Hotel.\n\nBring 10 copies of your resume and dress business casual. Check-in opens at 12:30pm.\n\nIf you can no longer attend, please cancel via the portal so we can free up your slot.\n\nThanks,\nECE Career Services",
+      "received_at": "2026-04-15T10:45:00Z",
+      "thread_id": null
+    },
+    {
+      "id": "e1_e05",
+      "subject": "URGENT: your LinkedIn account will be locked",
+      "sender": "LinkedIn Security <security-alerts@linkedln-secure.com>",
+      "body_plain": "We detected suspicious sign-in activity on your LinkedIn account. To prevent your account from being locked in the next 4 hours, please verify your identity immediately:\n\nVerify now: http://linkedln-secure.com/verify?token=ax84j2\n\nIf you don't verify, your account will be permanently suspended.\n\n— LinkedIn Security",
+      "received_at": "2026-04-15T11:30:00Z",
+      "thread_id": null
+    }
+  ]
+}

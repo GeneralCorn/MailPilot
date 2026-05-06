@@ -1,0 +1,564 @@
+from __future__ import annotations
+
+import time
+from typing import TYPE_CHECKING
+
+import anthropic
+
+from triage.schemas import (
+    Action,
+    Category,
+    Message,
+    State,
+    Status,
+    ToolCall,
+    ToolResult,
+)
+
+from ._anthropic import call_tools
+from ._client import client_kwargs, default_model
+
+if TYPE_CHECKING:
+    from triage.runtime import Runtime
+MAX_RETRIES = 3
+MAX_ITERATIONS = 5
+
+# tools whose successful execution implies the email still needs human attention
+_HUMAN_ATTENTION_TOOLS = {Action.ESCALATE, Action.FLAG}
+
+# tools that require explicit user approval before they fire (irreversible side-effects)
+_NEEDS_APPROVAL = {Action.CALENDAR, Action.SEND_EMAIL}
+
+
+def _split_plan(plan: list[ToolCall]) -> tuple[list[ToolCall], list[ToolCall]]:
+    auto = [c for c in plan if c.tool not in _NEEDS_APPROVAL]
+    proposed = [c for c in plan if c.tool in _NEEDS_APPROVAL]
+    return auto, proposed
+
+
+_SYSTEM = (
+    "You are the Worker in MailPilot. Given one classified email, decide what tool calls "
+    "to make to handle it. You can call multiple tools in a single response.\n\n"
+    "Guidance per category — every email needs at least ONE actionable tool besides summarize:\n"
+    "- Marketing: `archive` (folder='promotions'). Newsletters and digests count as marketing.\n"
+    "- Risk: ALWAYS `summarize` + `escalate`. Never auto-reply or auto-archive.\n"
+    "- Billing: ALWAYS `summarize` + `flag` so the user reviews.\n"
+    "    * `reply_draft` ONLY when the email asks a specific factual question with a clear\n"
+    "      answer (e.g. 'what's your billing address?'). For first-touch overdue chases or\n"
+    "      payment alerts, just flag — let the user decide whether to respond.\n"
+    "- Work: ALWAYS `summarize`. Then pick exactly one:\n"
+    "    * `calendar` (+ `send_email` kind='rsvp') for NEW meeting invites with RSVP language.\n"
+    "      RSVP CONFIRMATION receipts (already-confirmed) → `flag`, never propose a new event.\n"
+    "    * `reply_draft` when a colleague asks a direct, time-bound question that has a\n"
+    "      factual answer (e.g. 'send the Q3 numbers by Friday'), OR when a `Re:` thread\n"
+    "      escalation includes a hard deadline asking the user to confirm/decide today.\n"
+    "      NOT for routine status updates or heads-up alerts.\n"
+    "    * `flag` for status alerts / heads-up messages where the user should be aware but\n"
+    "      no automated response is appropriate.\n"
+    "    * `label` for purely informational FYI (auto-renewals, contract notices, weekly\n"
+    "      reports).\n"
+    "    * `no_action` for thread follow-ups that just close a previous discussion (the\n"
+    "      previous email already triggered the right action).\n"
+    "- Personal: prefer `reply_draft` over auto-send unless an explicit RSVP is requested.\n"
+    "- `calendar` and `send_email` are gated behind a human approval UI — never pre-filter\n"
+    "  them. The user decides; just propose them when content suggests they belong.\n"
+    "- The runtime fills in `email_id`; don't supply it yourself."
+)
+
+
+_TOOLS: list[dict] = [
+    {
+        "name": "summarize",
+        "description": "Save a 1-2 sentence summary of the email body for the reviewer.",
+        "input_schema": {
+            "type": "object",
+            "properties": {"summary": {"type": "string"}},
+            "required": ["summary"],
+        },
+    },
+    {
+        "name": "label",
+        "description": "Re-label the email's category. Rare; the router has done this.",
+        "input_schema": {
+            "type": "object",
+            "properties": {"category": {"type": "string", "enum": [c.value for c in Category]}},
+            "required": ["category"],
+        },
+    },
+    {
+        "name": "flag",
+        "description": "Mark the email as needing user attention.",
+        "input_schema": {
+            "type": "object",
+            "properties": {"flag": {"type": "boolean"}},
+            "required": ["flag"],
+        },
+    },
+    {
+        "name": "archive",
+        "description": "Move the email into a folder when no follow-up is needed.",
+        "input_schema": {
+            "type": "object",
+            "properties": {"folder": {"type": "string"}},
+            "required": ["folder"],
+        },
+    },
+    {
+        "name": "reply_draft",
+        "description": "Save a draft reply to Gmail for human review (NOT sent).",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "body": {"type": "string"},
+                "subject_override": {"type": "string"},
+            },
+            "required": ["body"],
+        },
+    },
+    {
+        "name": "calendar",
+        "description": (
+            "Propose a Google Calendar event. The user will review and approve before "
+            "the event is actually created."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "title": {"type": "string"},
+                "start_time": {"type": "string", "description": "ISO 8601"},
+                "end_time": {"type": "string", "description": "ISO 8601"},
+                "location": {"type": "string"},
+                "response": {"type": "string", "enum": ["accept", "decline", "tentative"]},
+            },
+            "required": ["title", "start_time", "end_time"],
+        },
+    },
+    {
+        "name": "send_email",
+        "description": (
+            "Propose sending a Gmail message (RSVP or confirmation). The user will review "
+            "and approve before any email is actually sent."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "kind": {"type": "string", "enum": ["rsvp", "confirmation"]},
+                "body": {"type": "string"},
+                "decision": {"type": "string", "enum": ["accept", "decline", "tentative"]},
+                "subject_override": {"type": "string"},
+            },
+            "required": ["kind", "body"],
+        },
+    },
+    {
+        "name": "escalate",
+        "description": "Route a risky or ambiguous email to a human reviewer.",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "target": {"type": "string"},
+                "reason": {"type": "string"},
+            },
+            "required": ["target", "reason"],
+        },
+    },
+    {
+        "name": "no_action",
+        "description": "Explicitly record that no action is needed.",
+        "input_schema": {
+            "type": "object",
+            "properties": {"reason": {"type": "string"}},
+            "required": ["reason"],
+        },
+    },
+]
+
+
+def _fewshot_messages() -> list[dict]:
+    """Three few-shots in proper tool_use + tool_result form, with cache_control on the last block."""
+    return [
+        # marketing promo → archive
+        {"role": "user", "content": (
+            "Subject: Big sale — 50% off this weekend\n"
+            "Sender: deals@store.com\n"
+            "Category: marketing\n"
+            "Required: call `archive` (folder='promotions').\n"
+            "Body: Limited-time offers on everything in store."
+        )},
+        {"role": "assistant", "content": [
+            {"type": "tool_use", "id": "fs1_a", "name": "archive",
+             "input": {"folder": "promotions"}},
+        ]},
+        {"role": "user", "content": [
+            {"type": "tool_result", "tool_use_id": "fs1_a", "content": "Moved to 'promotions'"},
+        ]},
+
+        # marketing newsletter / digest → still archive (no sale signal)
+        {"role": "user", "content": (
+            "Subject: Weekly TLDR — top 5 reads\n"
+            "Sender: newsletter@tldr.com\n"
+            "Category: marketing\n"
+            "Required: call `archive` (folder='promotions').\n"
+            "Body: This week's roundup of tech news. Unsubscribe at the bottom."
+        )},
+        {"role": "assistant", "content": [
+            {"type": "tool_use", "id": "fs1b_a", "name": "archive",
+             "input": {"folder": "promotions"}},
+        ]},
+        {"role": "user", "content": [
+            {"type": "tool_result", "tool_use_id": "fs1b_a", "content": "Moved to 'promotions'"},
+        ]},
+
+        # work meeting → summarize + calendar + send_email(rsvp)
+        {"role": "user", "content": (
+            "Subject: Standup Friday 10:00 AM\n"
+            "Sender: lead@acme.com\n"
+            "Category: work\n"
+            "Required: `summarize` PLUS one of: `reply_draft`, `calendar` (+ `send_email` "
+            "kind='rsvp' if RSVP language), `label`.\n"
+            "Body: Quick standup Friday 10–10:30 in Room 4. Please confirm."
+        )},
+        {"role": "assistant", "content": [
+            {"type": "tool_use", "id": "fs2_a", "name": "summarize",
+             "input": {"summary": "Standup Friday 10:00–10:30 AM in Room 4."}},
+            {"type": "tool_use", "id": "fs2_b", "name": "calendar",
+             "input": {
+                 "title": "Standup",
+                 "start_time": "2026-04-30T10:00:00Z",
+                 "end_time": "2026-04-30T10:30:00Z",
+                 "location": "Room 4",
+                 "response": "accept",
+             }},
+            {"type": "tool_use", "id": "fs2_c", "name": "send_email",
+             "input": {
+                 "kind": "rsvp",
+                 "decision": "accept",
+                 "body": "See you Friday.",
+             }},
+        ]},
+        {"role": "user", "content": [
+            {"type": "tool_result", "tool_use_id": "fs2_a", "content": "Summary saved"},
+            {"type": "tool_result", "tool_use_id": "fs2_b", "content": "Event proposal queued for approval"},
+            {"type": "tool_result", "tool_use_id": "fs2_c", "content": "RSVP proposal queued for approval"},
+        ]},
+
+        # risk → summarize + escalate
+        {"role": "user", "content": (
+            "Subject: URGENT: Verify your account NOW\n"
+            "Sender: support@bank-verify.ru\n"
+            "Category: risk\n"
+            "Required: `summarize` + `escalate` (target='security').\n"
+            "Body: Click this link immediately to keep your account active."
+        )},
+        {"role": "assistant", "content": [
+            {"type": "tool_use", "id": "fs3_a", "name": "summarize",
+             "input": {"summary": "Likely phishing — fake verification request from suspicious .ru domain."}},
+            {"type": "tool_use", "id": "fs3_b", "name": "escalate",
+             "input": {"target": "security", "reason": "phishing indicators"}},
+        ]},
+        {"role": "user", "content": [
+            {"type": "tool_result", "tool_use_id": "fs3_a", "content": "Summary saved"},
+            {"type": "tool_result", "tool_use_id": "fs3_b", "content": "Escalated to security"},
+        ]},
+
+        # billing overdue first-touch → summarize + flag (NO reply yet)
+        {"role": "user", "content": (
+            "Subject: OVERDUE: Invoice #2042 — please confirm payment date\n"
+            "Sender: ar@vendor.com\n"
+            "Category: billing\n"
+            "Required: `summarize` + `flag`. The reply requires a payment-date decision the\n"
+            "user must make, so do NOT draft a reply yet.\n"
+            "Body: Invoice #2042 is now 18 days past due. Can you confirm when payment will be sent?"
+        )},
+        {"role": "assistant", "content": [
+            {"type": "tool_use", "id": "fs4_a", "name": "summarize",
+             "input": {"summary": "Vendor chasing 18-day overdue invoice #2042 and asking for a payment date."}},
+            {"type": "tool_use", "id": "fs4_b", "name": "flag",
+             "input": {"flag": True}},
+        ]},
+        {"role": "user", "content": [
+            {"type": "tool_result", "tool_use_id": "fs4_a", "content": "Summary saved"},
+            {"type": "tool_result", "tool_use_id": "fs4_b", "content": "Flagged"},
+        ]},
+
+        # RSVP confirmation receipt → summarize + flag (no new calendar)
+        {"role": "user", "content": (
+            "Subject: Your RSVP for the spring career fair is confirmed\n"
+            "Sender: events@university.edu\n"
+            "Category: work\n"
+            "Required: `summarize` + `flag`. This is a confirmation receipt — the user already\n"
+            "RSVP'd, so do NOT propose a new calendar event.\n"
+            "Body: Your RSVP for April 25, 1pm-5pm is confirmed. Bring 10 resumes."
+        )},
+        {"role": "assistant", "content": [
+            {"type": "tool_use", "id": "fs_rsvp_a", "name": "summarize",
+             "input": {"summary": "RSVP confirmed for April 25 career fair, 1-5pm; bring 10 resumes."}},
+            {"type": "tool_use", "id": "fs_rsvp_b", "name": "flag",
+             "input": {"flag": True}},
+        ]},
+        {"role": "user", "content": [
+            {"type": "tool_result", "tool_use_id": "fs_rsvp_a", "content": "Summary saved"},
+            {"type": "tool_result", "tool_use_id": "fs_rsvp_b", "content": "Flagged"},
+        ]},
+
+        # thread follow-up that closes the discussion → summarize + no_action
+        {"role": "user", "content": (
+            "Subject: Re: Heads up — supply chain delay on SKU-7790\n"
+            "Sender: ops@vendor.com\n"
+            "Category: work\n"
+            "Required: `summarize` + `no_action`. Thread follow-up that resolves the issue —\n"
+            "the prior email already triggered the right action.\n"
+            "Body: Update: shipment cleared customs this morning, will arrive on schedule."
+        )},
+        {"role": "assistant", "content": [
+            {"type": "tool_use", "id": "fs_thread_a", "name": "summarize",
+             "input": {"summary": "Supply chain delay resolved: shipment cleared customs, on schedule."}},
+            {"type": "tool_use", "id": "fs_thread_b", "name": "no_action",
+             "input": {"reason": "Thread resolved by upstream message; nothing to do."}},
+        ]},
+        {"role": "user", "content": [
+            {"type": "tool_result", "tool_use_id": "fs_thread_a", "content": "Summary saved"},
+            {"type": "tool_result", "tool_use_id": "fs_thread_b", "content": "No action recorded"},
+        ]},
+
+        # work informational (contract renewal) → summarize + label
+        {"role": "user", "content": (
+            "Subject: Your master service agreement renews on June 1\n"
+            "Sender: success@vendor.com\n"
+            "Category: work\n"
+            "Required: `summarize` + `label` for an informational FYI/renewal.\n"
+            "Body: Your annual MSA renews automatically June 1 at the current rate. No action needed."
+        )},
+        {"role": "assistant", "content": [
+            {"type": "tool_use", "id": "fs5_a", "name": "summarize",
+             "input": {"summary": "MSA auto-renews June 1 at current rate; informational only."}},
+            {"type": "tool_use", "id": "fs5_b", "name": "label",
+             "input": {"category": "work"}},
+        ]},
+        {"role": "user", "content": [
+            {"type": "tool_result", "tool_use_id": "fs5_a", "content": "Summary saved"},
+            # cache_control on the LAST few-shot block — caches system + tools + all few-shots
+            {"type": "tool_result", "tool_use_id": "fs5_b", "content": "Labeled work",
+             "cache_control": {"type": "ephemeral"}},
+        ]},
+    ]
+
+
+_CATEGORY_REQUIREMENT = {
+    Category.MARKETING: (
+        "Required: call `archive` (folder='promotions'). Newsletters, digests, and promos all "
+        "go through archive."
+    ),
+    Category.BILLING: (
+        "Required: `summarize` + `flag`. Add `reply_draft` ONLY for a specific factual "
+        "question with a clear answer; first-touch overdue chases or payment FYIs just `flag`."
+    ),
+    Category.WORK: (
+        "Required: `summarize` + exactly one of:\n"
+        "  - `calendar` (+ `send_email` kind='rsvp') ONLY for NEW meeting invites needing RSVP;\n"
+        "  - `flag` for RSVP confirmations / heads-up alerts / status updates;\n"
+        "  - `reply_draft` for direct factual asks (e.g. 'send the Q3 numbers by Friday') OR\n"
+        "    `Re:` thread escalations with a hard deadline asking the user to confirm/decide;\n"
+        "  - `label` for informational FYI (auto-renewals, contract notices, weekly reports);\n"
+        "  - `no_action` for thread follow-ups closing a prior discussion."
+    ),
+    Category.RISK: (
+        "Required: `summarize` + `escalate` (target='security'). Never archive or auto-reply."
+    ),
+    Category.PERSONAL: (
+        "Required: `summarize` + `reply_draft` unless an explicit RSVP asks for calendar."
+    ),
+}
+
+
+def _target_user_message(email: Message, category: Category, prior_results: list[ToolResult] | None) -> dict:
+    body = email.body_plain or email.snippet or ""
+    requirement = _CATEGORY_REQUIREMENT.get(category, "")
+    text = (
+        f"Subject: {email.subject}\n"
+        f"Sender: {email.sender}\n"
+        f"Category: {category.value}\n"
+        f"{requirement}\n"
+        f"Body: {body[:600]}"
+    )
+    if prior_results:
+        prior_lines = "\n".join(
+            f"- {r.tool.value}: {'OK' if r.success else 'FAILED — ' + r.message[:120]}"
+            for r in prior_results
+        )
+        text += (
+            f"\n\nActions already attempted in this run:\n{prior_lines}\n\n"
+            "Replan the remaining steps to recover. Skip any actions already done."
+        )
+    return {"role": "user", "content": text}
+
+
+def plan_actions(
+    email: Message, state: State, prior_results: list[ToolResult] | None = None
+) -> list[ToolCall]:
+    category = state.classifications.get(email.id, Category.UNCLASSIFIED)
+    client = anthropic.Anthropic(**client_kwargs())
+
+    messages = _fewshot_messages() + [_target_user_message(email, category, prior_results)]
+
+    result = call_tools(
+        client,
+        model=default_model(),
+        system=_SYSTEM,
+        messages=messages,
+        tools=_TOOLS,
+        force_any=True,
+        max_tokens=2048,
+    )
+
+    if result is None:
+        return [
+            ToolCall(
+                tool=Action.ESCALATE,
+                parameters={"email_id": email.id, "target": "human", "reason": "worker planner failed"},
+                reason="planner LLM failure",
+            )
+        ]
+
+    calls: list[ToolCall] = []
+    for entry in result:
+        try:
+            tool = Action(entry["name"])
+        except ValueError:
+            continue
+        params = dict(entry.get("input") or {})
+        params["email_id"] = email.id
+        calls.append(ToolCall(tool=tool, parameters=params, reason=""))
+
+    if not calls:
+        return [
+            ToolCall(
+                tool=Action.ESCALATE,
+                parameters={"email_id": email.id, "target": "human", "reason": "worker produced no valid actions"},
+                reason="planner returned no usable tools",
+            )
+        ]
+    return calls
+
+
+def classify_error(result: ToolResult) -> str:
+    """retryable | recoverable | confirmation | fatal — bucketed from registry-wrapped ToolResult."""
+    err = (result.data.get("error_type") or "").strip()
+    msg = (result.message or "").lower()
+
+    if "permission" in msg or "unauthorized" in msg or "scope" in msg or "insufficient" in msg:
+        return "confirmation"
+    if err == "PermissionError":
+        return "confirmation"
+
+    is_http = "http" in err.lower() and "error" in err.lower()
+    if is_http or "httperror" in msg:
+        if "401" in msg or "403" in msg:
+            return "confirmation"
+        if any(c in msg for c in (" 500", " 502", " 503", " 504")):
+            return "retryable"
+        return "recoverable"
+
+    if err in {"TimeoutError", "ConnectionError", "ServerNotFoundError"}:
+        return "retryable"
+    if "timeout" in msg or "connection refused" in msg:
+        return "retryable"
+
+    if "quota" in msg or "rate limit" in msg:
+        return "recoverable"
+
+    return "fatal"
+
+
+def _backoff(retries: int) -> None:
+    time.sleep(min(0.5 * (2 ** (retries - 1)), 4.0))
+
+
+def work(email: Message, state: State, runtime: "Runtime | None" = None) -> Status:
+    if runtime is None:
+        from triage.runtime import Runtime as _Runtime
+        runtime = _Runtime()
+
+    initial_plan: list[ToolCall] = list(plan_actions(email, state))
+    state.worker_actions[email.id] = list(initial_plan)
+
+    auto, proposed = _split_plan(initial_plan)
+    remaining: list[ToolCall] = list(auto)
+    proposed_pile: list[ToolCall] = list(proposed)
+
+    results: list[ToolResult] = []
+    succeeded = 0
+    total = len(remaining)
+    iterations = 0
+
+    while remaining and iterations < MAX_ITERATIONS:
+        call = remaining.pop(0)
+        retries = 0
+        outcome: str | None = None
+
+        while True:
+            r = runtime.run_tool(call)
+            if r.success:
+                results.append(r)
+                succeeded += 1
+                outcome = "ok"
+                break
+
+            results.append(r)
+            kind = classify_error(r)
+
+            if kind == "retryable":
+                retries += 1
+                if retries > MAX_RETRIES:
+                    outcome = "exhausted"
+                    break
+                _backoff(retries)
+                continue
+            if kind == "recoverable":
+                outcome = "replan"
+                break
+            if kind == "confirmation":
+                state.sub_action_results[email.id] = results
+                state.email_status[email.id] = Status.FLAGGED
+                return Status.FLAGGED
+            # fatal
+            state.sub_action_results[email.id] = results
+            state.email_status[email.id] = Status.PENDING
+            return Status.PENDING
+
+        if outcome == "exhausted":
+            # let final scoring decide: prior successes -> PARTIAL_DONE, none -> PENDING
+            break
+        if outcome == "replan":
+            iterations += 1
+            replanned = list(plan_actions(email, state, prior_results=list(results)))
+            new_auto, new_proposed = _split_plan(replanned)
+            remaining = new_auto
+            proposed_pile.extend(new_proposed)
+            total = succeeded + len(remaining)
+            continue
+
+    state.sub_action_results[email.id] = results
+
+    if total == 0:
+        final = Status.DONE
+    elif succeeded == total:
+        final = Status.DONE
+    elif succeeded > 0:
+        final = Status.PARTIAL_DONE
+    else:
+        final = Status.PENDING
+
+    # escalate/flag tools imply human attention even if all sub-actions succeeded
+    if final == Status.DONE and any(
+        r.success and r.tool in _HUMAN_ATTENTION_TOOLS for r in results
+    ):
+        final = Status.FLAGGED
+
+    if proposed_pile:
+        state.proposed_actions[email.id] = list(proposed_pile)
+        # awaiting_approval takes precedence — there are still actions for the user to review
+        final = Status.AWAITING_APPROVAL
+
+    state.email_status[email.id] = final
+    return final
