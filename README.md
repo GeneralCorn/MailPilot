@@ -26,7 +26,17 @@ export LLM_PROVIDER=anthropic
 export ANTHROPIC_API_KEY=sk-ant-...
 ```
 
-For the live web UI you also need Gmail + Calendar OAuth credentials (`credentials.json` at repo root). The benchmark harness does not require them.
+For the live web UI you also need Gmail + Calendar OAuth credentials at `credentials.json` in the repo root. The benchmark harness does not require them.
+
+To obtain `credentials.json`:
+
+1. Open the [Google Cloud Console](https://console.cloud.google.com/) and create (or select) a project.
+2. Under **APIs & Services → Library**, enable both **Gmail API** and **Google Calendar API**.
+3. Under **APIs & Services → OAuth consent screen**, configure the consent screen. For local development, **External + Testing** is fine — add your own Gmail address under **Test users** (otherwise the OAuth flow will reject you).
+4. Under **APIs & Services → Credentials**, click **Create Credentials → OAuth client ID**. Application type **must be `Desktop app`** (the code uses `InstalledAppFlow.from_client_secrets_file` with `run_local_server(port=9090)` — see [`triage/gmail.py`](triage/gmail.py) — so a Web-application client will not work).
+5. Download the JSON and save it as `credentials.json` at the repo root.
+
+Scopes (`gmail.readonly`, `gmail.send`, `gmail.compose`, `calendar.events`) are requested by the code itself — no extra setup needed. On the first **Import Gmail** click the OAuth flow opens in your browser and writes `token.json` to the repo root; subsequent runs reuse it (and auto-refresh).
 
 ## Run the agent
 
